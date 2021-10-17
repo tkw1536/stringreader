@@ -17,16 +17,16 @@ func TestMarshal_UnmarshalSingle(t *testing.T) {
 		m.SingleParsers = nil
 		m.MultiParsers = nil
 
-		m.RegisterSingleParser("always", func(value string, ok bool) (interface{}, error) {
+		m.RegisterSingleParser("always", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
 			return value, nil
 		})
-		m.RegisterSingleParser("default", func(value string, ok bool) (interface{}, error) {
+		m.RegisterSingleParser("default", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
 			return "default", nil
 		})
-		m.RegisterSingleParser("special", func(value string, ok bool) (interface{}, error) {
+		m.RegisterSingleParser("special", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
 			return fmt.Sprintf("special:%q", value), nil
 		})
-		m.RegisterSingleParser("never", func(value string, ok bool) (interface{}, error) {
+		m.RegisterSingleParser("never", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
 			return nil, errors.New("never parser")
 		})
 	}
@@ -141,13 +141,13 @@ func ExampleMarshal_UnmarshalSingle() {
 
 	// the "string" type accepts any string, and falls back to the empty string if it does not exist.
 	// it is the default.
-	marshal.RegisterSingleParser("string", func(value string, ok bool) (interface{}, error) {
+	marshal.RegisterSingleParser("string", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
 		return value, nil
 	})
 
 	// the "port" type parses a port number.
 	// It returns port 22
-	marshal.RegisterSingleParser("port", func(value string, ok bool) (interface{}, error) {
+	marshal.RegisterSingleParser("port", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
 		// if no port was provided, use port 22
 		if !ok {
 			return 22, nil

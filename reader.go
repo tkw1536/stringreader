@@ -7,7 +7,7 @@ import (
 )
 
 // Marshal can unmarshal data from a Source.
-// See the Unmarshal function for details.
+// See the UnmarshalContext function for details.
 type Marshal struct {
 	NameTag       string // Optional, tag to read name from
 	StrictNameTag bool   // When false, allow fallback to field name
@@ -23,13 +23,16 @@ type Marshal struct {
 	StrictTyping bool
 }
 
+// ParsingContext is anything that can be used as a context for parsing
+type ParsingContext func(key string) interface{}
+
 // SingleParser is a function that parses a single value
-type SingleParser = func(value string, ok bool) (interface{}, error)
+type SingleParser = func(value string, ok bool, ctx ParsingContext) (interface{}, error)
 
 // MultiParser is a function that parses multiple values
-type MultiParser = func(value []string, ok bool) (interface{}, error)
+type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{}, error)
 
-// Unmarshal unmarshals data from source into dest.
+// UnmarshalContext unmarshals data from source into dest.
 //
 // Dest must be a pointer to a struct; if this is not the case, ErrNotPointerToStruct is returned.
 // Data is unmarshaled from source to dest as follows:
@@ -44,11 +47,12 @@ type MultiParser = func(value []string, ok bool) (interface{}, error)
 // When m.ParserTag is empty, and m.DefaultParser is non-empty, the value and ok are passed to the default function in m.SingleParsers or m.MultiParsers.
 // When m.ParserTag is empty, and m.DefaultParser is empty, or the referenced parser function does not exist, an error is returned.
 // When a parser exists in both m.SingleParsers and m.MultiParsers, an error is returned.
+// When calling a parsing context, the ctx argument is passed to it unchanged.
 //
 // When the Parser function returns a value and nil error, it is written into the specified field of dest.
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
-func (m Marshal) Unmarshal(dest interface{}, source Source) error {
+func (m Marshal) UnmarshalContext(dest interface{}, source Source, ctx ParsingContext) error {
 	// grab the pointer to the destination
 	dPtr := reflect.ValueOf(dest)
 	if dest == nil {
@@ -106,10 +110,10 @@ func (m Marshal) Unmarshal(dest interface{}, source Source) error {
 		switch {
 		case singleParser != nil:
 			rValue, rOK := source.Get(fieldName)
-			pValue, pErr = singleParser(rValue, rOK)
+			pValue, pErr = singleParser(rValue, rOK, ctx)
 		case multiParser != nil:
 			rValue, rOK := source.GetAll(fieldName)
-			pValue, pErr = multiParser(rValue, rOK)
+			pValue, pErr = multiParser(rValue, rOK, ctx)
 		}
 
 		// trigger errors
@@ -140,6 +144,11 @@ func (m Marshal) Unmarshal(dest interface{}, source Source) error {
 		fValue.Set(rValue)
 	}
 	return nil
+}
+
+// Unmarshal is like UnmarshalContext, but with a nil context
+func (m Marshal) Unmarshal(dest interface{}, source Source) error {
+	return m.UnmarshalContext(dest, source, nil)
 }
 
 // reflectConvert converts rValue to rType, and catches any panic that occurs
