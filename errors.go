@@ -14,16 +14,16 @@ var ErrBothParserType = errors.New("Marshal.Unmarshal: parser type in both Singl
 
 // ErrUnknownParser indicates that Marshal.Unmarshal encountered an unknown parser
 type ErrUnknownParser struct {
-	Type  string
-	Field string
-	cause error
+	Parser string
+	Field  string
+	cause  error
 }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
 func (err ErrUnknownParser) Unwrap() error { return err.cause }
 
 func (err ErrUnknownParser) Error() string {
-	return fmt.Sprintf("Marshal.Unmarshal: Type %q (for field %q) can not be determined: %s", err.Type, err.Field, err.cause.Error())
+	return fmt.Sprintf("Marshal.Unmarshal: Type %q (for field %q) can not be determined: %s", err.Parser, err.Field, err.cause.Error())
 }
 
 // ErrFailedToReadField indicates that Marshal.Unmarshal failed to read a field

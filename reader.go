@@ -23,9 +23,6 @@ type Marshal struct {
 	StrictTyping bool
 }
 
-// ParsingContext is anything that can be used as a context for parsing
-type ParsingContext func(key string) interface{}
-
 // SingleParser is a function that parses a single value
 type SingleParser = func(value string, ok bool, ctx ParsingContext) (interface{}, error)
 
@@ -52,7 +49,7 @@ type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{
 // When the Parser function returns a value and nil error, it is written into the specified field of dest.
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
-func (m Marshal) UnmarshalContext(dest interface{}, source Source, ctx ParsingContext) error {
+func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingData) error {
 	// grab the pointer to the destination
 	dPtr := reflect.ValueOf(dest)
 	if dest == nil {
@@ -73,34 +70,37 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, ctx ParsingCo
 	// keep track of the destination value!
 	dValue := dPtr.Elem()
 
+	ctx := mutableParsingContext{data: data}
+
 	// Read the fields of the type
 	for i := 0; i < dType.NumField(); i++ {
 		field := dType.Field(i)
+		ctx.dest = field.Name
 
 		// determine the name to lookup in source
 		// when we need a strict field, only use explicitly annotated ones
-		fieldName := field.Tag.Get(m.NameTag)
-		if fieldName == "" {
+		ctx.source = field.Tag.Get(m.NameTag)
+		if ctx.source == "" {
 			if m.StrictNameTag {
 				continue
 			}
-			fieldName = field.Name
+			ctx.source = field.Name
 		}
 
 		// determine the type of validator to run
 		// if we don't have a default type, don't do anything to fields without types!
-		fieldKind := field.Tag.Get(m.ParserTag)
-		if fieldKind == "" {
+		ctx.parser = field.Tag.Get(m.ParserTag)
+		if ctx.parser == "" {
 			if m.DefaultParser == "" {
 				continue
 			}
-			fieldKind = m.DefaultParser
+			ctx.parser = m.DefaultParser
 		}
 
 		// figure out if we have a single or a multi parser
-		singleParser, multiParser, err := m.GetParser(fieldKind)
+		singleParser, multiParser, err := m.GetParser(ctx.parser)
 		if err != nil {
-			return ErrUnknownParser{Type: fieldKind, Field: field.Name, cause: err}
+			return ErrUnknownParser{Parser: ctx.parser, Field: field.Name, cause: err}
 		}
 
 		// Get the appropriate field, and then parse it!
@@ -109,21 +109,21 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, ctx ParsingCo
 
 		switch {
 		case singleParser != nil:
-			rValue, rOK := source.Get(fieldName)
+			rValue, rOK := source.Get(ctx.source)
 			pValue, pErr = singleParser(rValue, rOK, ctx)
 		case multiParser != nil:
-			rValue, rOK := source.GetAll(fieldName)
+			rValue, rOK := source.GetAll(ctx.source)
 			pValue, pErr = multiParser(rValue, rOK, ctx)
 		}
 
 		// trigger errors
 		if pErr != nil {
-			return ErrFailedToReadField{Field: field.Name, cause: pErr}
+			return ErrFailedToReadField{Field: ctx.dest, cause: pErr}
 		}
 
 		// convert the value that was returned to the appropriate type in the field!
 		rValue := reflect.ValueOf(pValue)
-		fValue := dValue.FieldByName(field.Name)
+		fValue := dValue.FieldByName(ctx.dest)
 		fType := fValue.Type()
 
 		// when we don't have strict typing, allow automatic converstion of the value
@@ -148,7 +148,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, ctx ParsingCo
 
 // Unmarshal is like UnmarshalContext, but with a nil context
 func (m Marshal) Unmarshal(dest interface{}, source Source) error {
-	return m.UnmarshalContext(dest, source, nil)
+	return m.UnmarshalContext(dest, source, ParsingData{})
 }
 
 // reflectConvert converts rValue to rType, and catches any panic that occurs
