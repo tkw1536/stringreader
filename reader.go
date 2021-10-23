@@ -128,12 +128,20 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 		// when we don't have strict typing, allow automatic converstion of the value
 		if !m.StrictTyping {
-			if !rValue.CanConvert(fType) {
-				return ErrNotConvertible{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType}
-			}
-			rValue, err = reflectConvert(rValue, fType)
-			if err != nil {
-				return ErrNotConvertible{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType, cause: err}
+			if rValue.IsValid() {
+				if !rValue.CanConvert(fType) {
+					return ErrNotConvertible{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType}
+				}
+				rValue, err = reflectConvert(rValue, fType)
+				if err != nil {
+					return ErrNotConvertible{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType, cause: err}
+				}
+			} else {
+				// reflect.ValueOf(rValue) returned an invalid value.
+				// this can only happen when rValue is the zero value.
+				//
+				// so magically assume the zero-value of the desired type instead.
+				rValue = reflect.New(fType).Elem()
 			}
 		}
 

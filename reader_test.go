@@ -119,7 +119,7 @@ func TestMarshal_UnmarshalSingle(t *testing.T) {
 	}
 }
 
-func ExampleMarshal_UnmarshalSingle() {
+func ExampleMarshal_UnmarshalSingle_simple() {
 
 	// marshal is a simple marshal
 	marshal := &stringreader.Marshal{
@@ -194,4 +194,31 @@ func ExampleMarshal_UnmarshalSingle() {
 	// &{johnsmith localhost 22}
 	// &{jane.smith  2222}
 	// &{jack.smith localhost 22}
+}
+
+func ExampleMarshal_UnmarshalSingle_nil() {
+
+	marshal := &stringreader.Marshal{
+		NameTag: "read",
+
+		ParserTag:     "type",
+		DefaultParser: "string",
+	}
+
+	type TheType struct {
+		Value []string `type:"nilstringslice"`
+	}
+	marshal.RegisterSingleParser("nilstringslice", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
+		return nil, nil
+	})
+
+	var aType TheType
+	err := marshal.UnmarshalSingle(&aType, stringreader.SourceMap(map[string]string{}))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%v\n", &aType)
+
+	// Output:
+	// &{[]}
 }
