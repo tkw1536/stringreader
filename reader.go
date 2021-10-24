@@ -57,15 +57,14 @@ type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
 func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingData) error {
-	// grab the pointer to the destination
-	dPtr := reflect.ValueOf(dest)
 	if dest == nil {
 		return ErrValueIsNil
 	}
 
-	// check that the value is a pointer,
-	// and the pointed to value is a struct.
-	dType := dPtr.Type()
+	// ensure that the destination is a pointer to a struct
+	// and then use the pointer itself
+	dValue := reflect.ValueOf(dest)
+	dType := dValue.Type()
 	if dType == nil || dType.Kind() != reflect.Ptr {
 		return ErrNotPointerToStruct
 	}
@@ -73,22 +72,24 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 	if dType == nil || dType.Kind() != reflect.Struct {
 		return ErrNotPointerToStruct
 	}
+	dValue = dValue.Elem()
 
-	// keep track of the destination value!
-	dValue := dPtr.Elem()
-
+	// setup a parsing context, and cache some properties
 	ctx := mutableParsingContext{data: data}
-
+	dNum := dType.NumField()
 	hasInlineParser := m.InlineParser != ""
 
 	// Read the fields of the type
-	for i := 0; i < dType.NumField(); i++ {
-		field := dType.Field(i)
-		ctx.dest = field.Name
+	for i := 0; i < dNum; i++ {
+		fStructField := dType.Field(i)
+		fType := fStructField.Type
+		fValue := dValue.Field(i)
 
-		// determine the type of validator to run
-		// if we don't have a default type, don't do anything to fields without types!
-		ctx.parser = field.Tag.Get(m.ParserTag)
+		ctx.dest = fStructField.Name
+
+		// determine the type of parser to run
+		// using the default type when necessary
+		ctx.parser = fStructField.Tag.Get(m.ParserTag)
 		if ctx.parser == "" {
 			if m.DefaultParser == "" {
 				continue
@@ -101,13 +102,10 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 		if hasInlineParser && ctx.parser == m.InlineParser {
 			var fieldPointer interface{}
 
-			// determine the type of the inlined field
-			fType := field.Type
 			switch fType.Kind() {
-
 			// it is a struct (without an indirection) => simple
 			case reflect.Struct:
-				fieldPointer = dPtr.Elem().Field(i).Addr().Interface()
+				fieldPointer = fValue.Addr().Interface()
 
 			// it should be a pointer to a struct
 			case reflect.Ptr:
@@ -118,7 +116,6 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				}
 
 				// ensure that the value is not nil
-				fValue := dPtr.Elem().Field(i)
 				if fValue.IsNil() {
 					fValue.Set(reflect.New(fType))
 				}
@@ -137,18 +134,18 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 		// determine the name to lookup in source
 		// when we need a strict field, only use explicitly annotated ones
-		ctx.source = field.Tag.Get(m.NameTag)
+		ctx.source = fStructField.Tag.Get(m.NameTag)
 		if ctx.source == "" {
 			if m.StrictNameTag {
 				continue
 			}
-			ctx.source = field.Name
+			ctx.source = fStructField.Name
 		}
 
 		// figure out if we have a single or a multi parser
 		singleParser, multiParser, err := m.GetParser(ctx.parser)
 		if err != nil {
-			return ErrUnknownParser{Parser: ctx.parser, Field: field.Name, cause: err}
+			return ErrUnknownParser{Parser: ctx.parser, Field: fStructField.Name, cause: err}
 		}
 
 		// Get the appropriate field, and then parse it!
@@ -163,26 +160,23 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			rValue, rOK := source.GetAll(ctx.source)
 			pValue, pErr = multiParser(rValue, rOK, ctx)
 		}
-
-		// trigger errors
 		if pErr != nil {
 			return ErrFailedToReadField{Field: ctx.dest, cause: pErr}
 		}
 
 		// convert the value that was returned to the appropriate type in the field!
 		rValue := reflect.ValueOf(pValue)
-		fValue := dValue.FieldByName(ctx.dest)
-		fType := fValue.Type()
 
-		// when we don't have strict typing, allow automatic converstion of the value
 		if !m.StrictTyping {
+			// when we allow automatic type conversions and we have a valid (non-nil) value returned
+			// convert the value to the proper type!
 			if rValue.IsValid() {
 				if !rValue.CanConvert(fType) {
-					return ErrNotConvertible{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType}
+					return ErrNotConvertible{Field: fStructField.Name, ReturnedType: rValue.Type(), FieldType: fType}
 				}
 				rValue, err = reflectConvert(rValue, fType)
 				if err != nil {
-					return ErrNotConvertible{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType, cause: err}
+					return ErrNotConvertible{Field: fStructField.Name, ReturnedType: rValue.Type(), FieldType: fType, cause: err}
 				}
 			} else {
 				// reflect.ValueOf(rValue) returned an invalid value.
@@ -193,9 +187,9 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			}
 		}
 
-		// check if we can assign the value, then assign
+		// safely assign the value to the proper type!
 		if !rValue.Type().AssignableTo(fType) {
-			return ErrNotAssignable{Field: field.Name, ReturnedType: rValue.Type(), FieldType: fType}
+			return ErrNotAssignable{Field: fStructField.Name, ReturnedType: rValue.Type(), FieldType: fType}
 		}
 		fValue.Set(rValue)
 	}
