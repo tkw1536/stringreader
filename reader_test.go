@@ -222,3 +222,67 @@ func ExampleMarshal_UnmarshalSingle_nil() {
 	// Output:
 	// &{[]}
 }
+
+func ExampleMarshal_UnmarshalSingle_recursive() {
+
+	marshal := &stringreader.Marshal{
+		NameTag: "read",
+
+		ParserTag:    "type",
+		InlineParser: "inline",
+	}
+
+	// create three different nested structs.
+	// that we can inline later
+
+	type WithoutIndirection struct {
+		Value string `read:"nested" type:"string"`
+	}
+
+	type WithIndirectionButNil struct {
+		Value string `read:"pointed" type:"string"`
+	}
+
+	type WithIndirectionButNotNil struct {
+		Value  string `read:"preset" type:"string"`
+		Preset int
+	}
+
+	// create a new type, and register the string parser.
+	// Inline the three nested structs
+	type TheType struct {
+		Plain         string                    `read:"plain" type:"string"`
+		Inline        WithoutIndirection        `type:"inline"`
+		NilPointer    *WithIndirectionButNil    `type:"inline"`
+		NonNilPointer *WithIndirectionButNotNil `type:"inline"`
+	}
+	marshal.RegisterSingleParser("string", func(value string, ok bool, ctx stringreader.ParsingContext) (interface{}, error) {
+		return value, nil
+	})
+
+	// create a new element to read but preset the `Value` to 3.
+	// this should prevent a new preset struct from being allocated.
+	var aType TheType
+	aType.NonNilPointer = &WithIndirectionButNotNil{
+		Preset: 3,
+	}
+	err := marshal.UnmarshalSingle(&aType, stringreader.SourceMap(map[string]string{
+		"plain":   "plain value",
+		"nested":  "inline value",
+		"pointed": "pointed value",
+		"preset":  "preset value",
+	}))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%v\n", aType.Plain)
+	fmt.Printf("%v\n", aType.Inline)
+	fmt.Printf("%v\n", *aType.NilPointer)
+	fmt.Printf("%v\n", *aType.NonNilPointer)
+
+	// Output:
+	// plain value
+	// {inline value}
+	// {pointed value}
+	// {preset value 3}
+}

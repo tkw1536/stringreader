@@ -14,6 +14,7 @@ type Marshal struct {
 
 	ParserTag     string // tag to read parser from
 	DefaultParser string // default parser to fall back to (optional)
+	InlineParser  string // parser name to use for recursive struct parsing (optional)
 
 	// Known set of parsers
 	SingleParsers map[string]SingleParser
@@ -35,6 +36,12 @@ type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{
 // Data is unmarshaled from source to dest as follows:
 //
 // For each public field, the go tags are examined.
+//
+// When m.InlineParser is non-empty and m.ParserTag is non-empty and the parser tag equals the inline tag, atttempt
+// to recursivly calls UnmarshalContext with the same source and data.
+// When the field type is a struct, the field value can be used as a new dest.
+// When the field type is a pointer to a struct, create a new zero value (when needed) for the provided type and then use it as a dest.
+// When the field type is none of the above, return ErrInlineNotStruct.
 //
 // When m.NameTag is non-empty, data from the specified name is read from source.
 // When m.NameTag does not exist, and m.StrictNameTag is true, the field is skipped.
@@ -72,20 +79,12 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 	ctx := mutableParsingContext{data: data}
 
+	hasInlineParser := m.InlineParser != ""
+
 	// Read the fields of the type
 	for i := 0; i < dType.NumField(); i++ {
 		field := dType.Field(i)
 		ctx.dest = field.Name
-
-		// determine the name to lookup in source
-		// when we need a strict field, only use explicitly annotated ones
-		ctx.source = field.Tag.Get(m.NameTag)
-		if ctx.source == "" {
-			if m.StrictNameTag {
-				continue
-			}
-			ctx.source = field.Name
-		}
 
 		// determine the type of validator to run
 		// if we don't have a default type, don't do anything to fields without types!
@@ -95,6 +94,55 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				continue
 			}
 			ctx.parser = m.DefaultParser
+		}
+
+		// we have the inline parser value, so recursively process the struct
+		// as instructed by the user.
+		if hasInlineParser && ctx.parser == m.InlineParser {
+			var fieldPointer interface{}
+
+			// determine the type of the inlined field
+			fType := field.Type
+			switch fType.Kind() {
+
+			// it is a struct (without an indirection) => simple
+			case reflect.Struct:
+				fieldPointer = dPtr.Elem().Field(i).Addr().Interface()
+
+			// it should be a pointer to a struct
+			case reflect.Ptr:
+				// check that the pointed to element is indeed a struct
+				fType = fType.Elem()
+				if fType.Kind() != reflect.Struct {
+					return ErrInlineNotStruct
+				}
+
+				// ensure that the value is not nil
+				fValue := dPtr.Elem().Field(i)
+				if fValue.IsNil() {
+					fValue.Set(reflect.New(fType))
+				}
+				// and use the fieldPointer
+				fieldPointer = fValue.Interface()
+			default:
+				return ErrInlineNotStruct
+			}
+
+			err := m.UnmarshalContext(fieldPointer, source, data)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		// determine the name to lookup in source
+		// when we need a strict field, only use explicitly annotated ones
+		ctx.source = field.Tag.Get(m.NameTag)
+		if ctx.source == "" {
+			if m.StrictNameTag {
+				continue
+			}
+			ctx.source = field.Name
 		}
 
 		// figure out if we have a single or a multi parser

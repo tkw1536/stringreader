@@ -9,6 +9,7 @@ import (
 
 var ErrValueIsNil = errors.New("Marshal.Unmarshal: value is nil")
 var ErrNotPointerToStruct = errors.New("Marshal.Unmarshal: dest is not a pointer to a struct")
+var ErrInlineNotStruct = errors.New("Marshal.Unmarshal: inline field is not a struct or pointer to struct")
 var ErrUnknownParserType = errors.New("Marshal.Unmarshal: unknown parser type")
 var ErrBothParserType = errors.New("Marshal.Unmarshal: parser type in both Single and Multi")
 
