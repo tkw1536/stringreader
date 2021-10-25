@@ -1,60 +1,75 @@
 package stringreader
 
-// Source is a data source consisting of both a Single and MultiSource
+// Source represents a source of string-identified data.
+// Each datum is identified using a string key.
+//
+// Data exists in two forms, either a single string value or a slice of string values.
+// These are defined in SourceSingle and SourceMulti represectively.
+// Data between the two does not have to be related.
+//
+// To create a Source from SourceSingle and SourceMulti components, use SourceSplit.
 type Source interface {
-	SingleSource
-	MultiSource
+	SourceSingle
+	SourceMulti
 }
 
-// SingleSource is a data source that takes as input a key and returns a single string value
-type SingleSource interface {
+// SourceSingle represents a source of data with each datum being a single string.
+// See also Source.
+type SourceSingle interface {
+	// Get attempts to read the datum with the provided key.
+	// Returns the value of the datum and and the value true.
+	//
+	// When the provided datum does not exist,
+	// or an error occurs attempting to read it, returns the empty string and false.
 	Get(key string) (value string, ok bool)
 }
 
-// MultiSource is a data source that takes as input a key and returns a single string value
-type MultiSource interface {
+// SourceMulti represents a source of data with each datum being a single string.
+// See also Source.
+type SourceMulti interface {
+	// Get attempts to read the datum with the provided key.
+	// Returns the value of the datum and and the value true.
+	//
+	// When the provided datum does not exist,
+	// or an error occurs attempting to read it, returns nil and false.
 	GetAll(key string) (value []string, ok bool)
 }
 
-// SourceFromSingle returns a new Source which uses a no-op multi source
-func SourceFromSingle(s SingleSource) Source {
-	return splitSource{single: s, multi: nopSource{}}
+// SourceSplit represents a Source that consists of a SourceSingle and a SourceMulti.
+// Each source is used for their respective operations.
+//
+// When either ComponentSource is nil, simulates an empty source.
+type SourceSplit struct {
+	SourceSingle
+	SourceMulti
 }
 
-// SourceFromMulti returns a new Source which uses a no-op single source
-func SourceFromMulti(m MultiSource) Source {
-	return splitSource{single: nopSource{}, multi: m}
+func (s SourceSplit) Get(value string) (string, bool) {
+	if s.SourceSingle == nil {
+		return "", false
+	}
+	return s.SourceSingle.Get(value)
 }
 
-// splitSource represents a seperated single and multi source
-type splitSource struct {
-	single SingleSource
-	multi  MultiSource
+func (s SourceSplit) GetAll(value string) ([]string, bool) {
+	if s.SourceMulti == nil {
+		return nil, false
+	}
+	return s.SourceMulti.GetAll(value)
 }
 
-func (s splitSource) Get(value string) (string, bool) {
-	return s.single.Get(value)
+// SourceSingleMap implements SourceSingle.
+type SourceSingleMap map[string]string
+
+func (s SourceSingleMap) Get(src string) (value string, ok bool) {
+	value, ok = s[src]
+	return
 }
 
-func (s splitSource) GetAll(value string) ([]string, bool) {
-	return s.multi.GetAll(value)
-}
+// SourceMultiMap implements SourceMulti.
+type SourceMultiMap map[string][]string
 
-// nopSource is a source that always returns false
-type nopSource struct{}
-
-func (nopSource) Get(value string) (string, bool) {
-	return "", false
-}
-
-func (nopSource) GetAll(value string) ([]string, bool) {
-	return nil, false
-}
-
-// SourceMap is a map that satfisfies Source
-type SourceMap map[string]string
-
-func (s SourceMap) Get(key string) (value string, ok bool) {
-	value, ok = s[key]
+func (src SourceMultiMap) GetAll(key string) (value []string, ok bool) {
+	value, ok = src[key]
 	return
 }

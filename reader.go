@@ -213,13 +213,13 @@ func reflectConvert(rValue reflect.Value, rType reflect.Type) (v reflect.Value, 
 }
 
 // UnmarshalSingle is like Unmarshal, except that it pretends the multi fields for source do not exist
-func (m Marshal) UnmarshalSingle(dest interface{}, source SingleSource) error {
-	return m.Unmarshal(dest, SourceFromSingle(source))
+func (m Marshal) UnmarshalSingle(dest interface{}, source SourceSingle) error {
+	return m.Unmarshal(dest, SourceSplit{SourceSingle: source})
 }
 
 // UnmarshalMulti is like Unmarshal, except that it pretends the single fields for source do not exist
-func (m Marshal) UnmarshalMulti(dest interface{}, source MultiSource) error {
-	return m.Unmarshal(dest, SourceFromMulti(source))
+func (m Marshal) UnmarshalMulti(dest interface{}, source SourceMulti) error {
+	return m.Unmarshal(dest, SourceSplit{SourceMulti: source})
 }
 
 // GetParser finds either a single or multi parser, and performs appropriate error checking

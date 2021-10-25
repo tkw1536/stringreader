@@ -99,7 +99,7 @@ func TestMarshal_UnmarshalSingle(t *testing.T) {
 			target := reflect.TypeOf(tt.wantDest)
 			dest := reflect.New(target)
 
-			err := m.UnmarshalSingle(dest.Interface(), stringreader.SourceMap(tt.src))
+			err := m.UnmarshalSingle(dest.Interface(), stringreader.SourceSingleMap(tt.src))
 			if tt.wantErr {
 				if err == nil {
 					t.Error("wantErr = true, err = nil")
@@ -160,7 +160,7 @@ func ExampleMarshal_UnmarshalSingle_simple() {
 	// Parse a bunch of user profiles!
 
 	var johnSmith UserProfile
-	err := marshal.UnmarshalSingle(&johnSmith, stringreader.SourceMap(map[string]string{
+	err := marshal.UnmarshalSingle(&johnSmith, stringreader.SourceSingleMap(map[string]string{
 		"port": "22",
 		"user": "johnsmith",
 		"host": "localhost",
@@ -171,7 +171,7 @@ func ExampleMarshal_UnmarshalSingle_simple() {
 	fmt.Printf("%v\n", &johnSmith)
 
 	var janeSmith UserProfile
-	err = marshal.UnmarshalSingle(&janeSmith, stringreader.SourceMap(map[string]string{
+	err = marshal.UnmarshalSingle(&janeSmith, stringreader.SourceSingleMap(map[string]string{
 		"port": "2222",
 		"user": "jane.smith",
 	}))
@@ -181,7 +181,7 @@ func ExampleMarshal_UnmarshalSingle_simple() {
 	fmt.Printf("%v\n", &janeSmith)
 
 	var jackSmith UserProfile
-	err = marshal.UnmarshalSingle(&jackSmith, stringreader.SourceMap(map[string]string{
+	err = marshal.UnmarshalSingle(&jackSmith, stringreader.SourceSingleMap(map[string]string{
 		"user": "jack.smith",
 		"host": "localhost",
 	}))
@@ -213,7 +213,7 @@ func ExampleMarshal_UnmarshalSingle_nil() {
 	})
 
 	var aType TheType
-	err := marshal.UnmarshalSingle(&aType, stringreader.SourceMap(map[string]string{}))
+	err := marshal.UnmarshalSingle(&aType, stringreader.SourceSingleMap(map[string]string{}))
 	if err != nil {
 		panic(err)
 	}
@@ -266,7 +266,7 @@ func ExampleMarshal_UnmarshalSingle_recursive() {
 	aType.NonNilPointer = &WithIndirectionButNotNil{
 		Preset: 3,
 	}
-	err := marshal.UnmarshalSingle(&aType, stringreader.SourceMap(map[string]string{
+	err := marshal.UnmarshalSingle(&aType, stringreader.SourceSingleMap(map[string]string{
 		"plain":   "plain value",
 		"nested":  "inline value",
 		"pointed": "pointed value",
