@@ -56,7 +56,7 @@ func (err ErrNotConvertible) Error() string {
 	return fmt.Sprintf("Marshal.Unmarshal: Failed to process value for field %q: Parser returned type %s, but cannot convert to %s%s", err.Field, err.ReturnedType, err.FieldType, suffix)
 }
 
-// ErrNotConvertible intends that the returned value can not be assigned to the requested value.
+// ErrNotAssignable intends that the returned value can not be assigned to the requested value.
 type ErrNotAssignable struct {
 	Field        string
 	ReturnedType reflect.Type

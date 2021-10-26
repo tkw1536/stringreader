@@ -4,6 +4,7 @@ package stringreader
 import (
 	"fmt"
 	"reflect"
+	"sync"
 )
 
 // Marshal can unmarshal data from a Source.
@@ -29,6 +30,13 @@ type SingleParser = func(value string, ok bool, ctx ParsingContext) (interface{}
 
 // MultiParser is a function that parses multiple values
 type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{}, error)
+
+// a pool to receive ParsingContext objects from.
+var contextPool = &sync.Pool{
+	New: func() interface{} {
+		return new(ParsingContext)
+	},
+}
 
 // UnmarshalContext unmarshals data from source into dest.
 //
@@ -74,8 +82,14 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 	}
 	dValue = dValue.Elem()
 
-	// setup a parsing context, and cache some properties
-	ctx := mutableParsingContext{data: data}
+	// grab a new context item from the pool
+	// and store context data with it.
+	ctx := contextPool.Get().(*parsingContext)
+	defer contextPool.Put(ctx)
+
+	ctx.data = data
+	defer ctx.Reset()
+
 	dNum := dType.NumField()
 	hasInlineParser := m.InlineParser != ""
 
@@ -155,9 +169,13 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 		switch {
 		case singleParser != nil:
 			rValue, rOK := source.Get(ctx.source)
+			ctx.single = true
+
 			pValue, pErr = singleParser(rValue, rOK, ctx)
 		case multiParser != nil:
 			rValue, rOK := source.GetAll(ctx.source)
+			ctx.single = false
+
 			pValue, pErr = multiParser(rValue, rOK, ctx)
 		}
 		if pErr != nil {
