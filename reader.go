@@ -34,7 +34,7 @@ type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{
 // a pool to receive ParsingContext objects from.
 var contextPool = &sync.Pool{
 	New: func() interface{} {
-		return new(ParsingContext)
+		return new(parsingContext)
 	},
 }
 
