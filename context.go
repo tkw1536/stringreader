@@ -6,21 +6,31 @@ package stringreader
 // Parsers should not retain references to ParsingContext, as it might be re-used between parsers.
 // See also SingleParser, MultiParser.
 type ParsingContext interface {
-	// Dest returns the name of the destination field that is being written to.
-	Dest() string
-	// Source returns the key of the datum that is being read.
-	Source() string
-
-	// Parser returns the name of the parser being used
-	Parser() string
-	// Single indicates if the parser being used is a SingleParser (true) or MultiParser (false)
-	Single() bool
+	UnmarshalContext
 
 	// Get returns a local datum associated to the current destination from the underlying ParsingData object.
 	Get(key string) interface{}
 
 	// GetGlobal returns a global datum from the underlying ParsingData object.
 	GetGlobal(key string) interface{}
+}
+
+// UnmarshalContext holds the current state of the unmarshaling process.
+// It does not hold any references to ParsingData objects.
+type UnmarshalContext interface {
+	// Dest returns the name of the destination field that is being written to.
+	// When no destination is being written, returns the empty string.
+	Dest() string
+	// Source returns the key of the datum that is being read.
+	// When no destination is being written, returns the empty string.
+	Source() string
+
+	// Parser returns the name of the parser being used
+	// When no parser is being used, returns the empty string.
+	Parser() string
+	// Single indicates if the parser being used is a SingleParser (true) or MultiParser (false).
+	// When the Parser() method returns the empty string, the result is undefined.
+	Single() bool
 }
 
 // ParsingData holds contextual data for parsers.

@@ -39,8 +39,10 @@ var contextPool = &sync.Pool{
 }
 
 // UnmarshalContext unmarshals data from source into dest.
+// Any non-nil error returned implements UnmarshalError.
 //
-// Dest must be a pointer to a struct; if this is not the case, ErrNotPointerToStruct is returned.
+// Dest must be a pointer to a struct; if this is not the case, ErrDestIsNil or ErrNotPointerToStruct is returned.
+//
 // Data is unmarshaled from source to dest as follows:
 //
 // For each public field, the go tags are examined.
@@ -66,7 +68,7 @@ var contextPool = &sync.Pool{
 // When either the conversion, or assignablity is impossible, an error is returned.
 func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingData) error {
 	if dest == nil {
-		return ErrValueIsNil
+		return ErrDestIsNil
 	}
 
 	// ensure that the destination is a pointer to a struct
@@ -126,7 +128,10 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				// check that the pointed to element is indeed a struct
 				fType = fType.Elem()
 				if fType.Kind() != reflect.Struct {
-					return ErrInlineNotStruct
+					return ErrInlineNotStruct{
+						dest:   ctx.dest,
+						parser: ctx.parser,
+					}
 				}
 
 				// ensure that the value is not nil
@@ -136,7 +141,10 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				// and use the fieldPointer
 				fieldPointer = fValue.Interface()
 			default:
-				return ErrInlineNotStruct
+				return ErrInlineNotStruct{
+					dest:   ctx.dest,
+					parser: ctx.parser,
+				}
 			}
 
 			err := m.UnmarshalContext(fieldPointer, source, data)
@@ -159,7 +167,13 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 		// figure out if we have a single or a multi parser
 		singleParser, multiParser, err := m.GetParser(ctx.parser)
 		if err != nil {
-			return ErrUnknownParser{Parser: ctx.parser, Field: fStructField.Name, cause: err}
+			return ErrUnknownParser{
+				dest:   ctx.dest,
+				source: ctx.source,
+				parser: ctx.parser,
+
+				cause: err,
+			}
 		}
 
 		// Get the appropriate field, and then parse it!
@@ -179,7 +193,14 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			pValue, pErr = multiParser(rValue, rOK, ctx)
 		}
 		if pErr != nil {
-			return ErrFailedToReadField{Field: ctx.dest, cause: pErr}
+			return ErrFailedToParseField{
+				dest:   ctx.dest,
+				source: ctx.source,
+				parser: ctx.parser,
+				single: ctx.single,
+
+				cause: pErr,
+			}
 		}
 
 		// convert the value that was returned to the appropriate type in the field!
@@ -190,11 +211,33 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			// convert the value to the proper type!
 			if rValue.IsValid() {
 				if !rValue.CanConvert(fType) {
-					return ErrNotConvertible{Field: fStructField.Name, ReturnedType: rValue.Type(), FieldType: fType}
+					return ErrWrongDestType{
+						dest:   ctx.dest,
+						source: ctx.source,
+						parser: ctx.parser,
+						single: ctx.single,
+
+						Assignment:   false,
+						ReturnedType: rValue.Type(),
+						DestType:     fType,
+
+						cause: nil,
+					}
 				}
 				rValue, err = reflectConvert(rValue, fType)
 				if err != nil {
-					return ErrNotConvertible{Field: fStructField.Name, ReturnedType: rValue.Type(), FieldType: fType, cause: err}
+					return ErrWrongDestType{
+						dest:   ctx.dest,
+						source: ctx.source,
+						parser: ctx.parser,
+						single: ctx.single,
+
+						Assignment:   false,
+						ReturnedType: rValue.Type(),
+						DestType:     fType,
+
+						cause: err,
+					}
 				}
 			} else {
 				// reflect.ValueOf(rValue) returned an invalid value.
@@ -207,7 +250,16 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 		// safely assign the value to the proper type!
 		if !rValue.Type().AssignableTo(fType) {
-			return ErrNotAssignable{Field: fStructField.Name, ReturnedType: rValue.Type(), FieldType: fType}
+			return ErrWrongDestType{
+				dest:   ctx.dest,
+				source: ctx.source,
+				parser: ctx.parser,
+				single: ctx.single,
+
+				Assignment:   true,
+				ReturnedType: rValue.Type(),
+				DestType:     fType,
+			}
 		}
 		fValue.Set(rValue)
 	}
