@@ -92,15 +92,13 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 	ctx.data = data
 	defer ctx.Reset()
 
+	// Iterate over the values of that field
 	dNum := dType.NumField()
-	hasInlineParser := m.InlineParser != ""
-
-	// Read the fields of the type
 	for i := 0; i < dNum; i++ {
 		fStructField := dType.Field(i)
-		fType := fStructField.Type
 		fValue := dValue.Field(i)
 
+		fType := fStructField.Type
 		ctx.dest = fStructField.Name
 
 		// determine the type of parser to run
@@ -113,9 +111,9 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			ctx.parser = m.DefaultParser
 		}
 
-		// we have the inline parser value, so recursively process the struct
-		// as instructed by the user.
-		if hasInlineParser && ctx.parser == m.InlineParser {
+		// check if the inline parser is being requested.
+		// and if so, do the inlining.
+		if m.InlineParser != "" && ctx.parser == m.InlineParser {
 			var fieldPointer interface{}
 
 			switch fType.Kind() {
@@ -134,7 +132,8 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 					}
 				}
 
-				// ensure that the value is not nil
+				// when the value is nil, magically create a new value
+				// so that we can fill zeroed pointer types.
 				if fValue.IsNil() {
 					fValue.Set(reflect.New(fType))
 				}
@@ -154,8 +153,8 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			continue
 		}
 
-		// determine the name to lookup in source
-		// when we need a strict field, only use explicitly annotated ones
+		// determine which field to look at from the source
+		// use default when needed
 		ctx.source = fStructField.Tag.Get(m.NameTag)
 		if ctx.source == "" {
 			if m.StrictNameTag {
@@ -176,7 +175,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			}
 		}
 
-		// Get the appropriate field, and then parse it!
+		// load and parse the appropriate value.
 		var pValue interface{}
 		var pErr error
 
@@ -203,13 +202,13 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			}
 		}
 
-		// convert the value that was returned to the appropriate type in the field!
+		// we need to convert the value we received to the proper type.
 		rValue := reflect.ValueOf(pValue)
 
 		if !m.StrictTyping {
-			// when we allow automatic type conversions and we have a valid (non-nil) value returned
-			// convert the value to the proper type!
 			if rValue.IsValid() {
+				// when we allow automatic type conversions and we have a valid (non-nil) value returned
+				// convert the value to the proper type!
 				if !rValue.CanConvert(fType) {
 					return ErrWrongDestType{
 						dest:   ctx.dest,
@@ -249,7 +248,8 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 		}
 
 		// safely assign the value to the proper type!
-		if !rValue.Type().AssignableTo(fType) {
+		// we are already safe when we converterd
+		if m.StrictTyping && !rValue.Type().AssignableTo(fType) {
 			return ErrWrongDestType{
 				dest:   ctx.dest,
 				source: ctx.source,
@@ -261,6 +261,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				DestType:     fType,
 			}
 		}
+
 		fValue.Set(rValue)
 	}
 	return nil
