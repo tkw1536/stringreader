@@ -7,101 +7,112 @@ import (
 	"errors"
 )
 
-// UnmarshalError is an error returned by the Unmarshal function.
-type UnmarshalError interface {
+// MarshalError is an error returned by a Marshal function.
+type MarshalError interface {
 	error
-	UnmarshalState
+	State
 }
-
-// ensure that all the errors in this package implement UnmarshalError.
-var _ UnmarshalError = (*freeUnmarshalError)(nil)
-var _ UnmarshalError = (*ErrInlineNotStruct)(nil)
-var _ UnmarshalError = (*ErrUnknownParser)(nil)
-var _ UnmarshalError = (*ErrFailedToParseField)(nil)
-var _ UnmarshalError = (*ErrWrongDestType)(nil)
 
 // freeUnmarshalError implements UnmarshalError, but does not contain any contextual information.
 type freeUnmarshalError string
 
-func (freeUnmarshalError) Dest() string           { return "" }
-func (freeUnmarshalError) Source() string         { return "" }
-func (freeUnmarshalError) Parser() string         { return "" }
-func (freeUnmarshalError) Single() bool           { return false }
+func (freeUnmarshalError) Field() string          { return "" }
 func (freeUnmarshalError) Tag() reflect.StructTag { return "" }
+
+func (freeUnmarshalError) Datum() string { return "" }
+
+func (freeUnmarshalError) Typ() string { return "" }
+func (freeUnmarshalError) Kind() Kind  { return KindUndef }
 
 func (err freeUnmarshalError) Error() string { return string(err) }
 
-var ErrDestIsNil UnmarshalError = freeUnmarshalError("Marshal.Unmarshal: dest is nil")
-var ErrNotPointerToStruct UnmarshalError = freeUnmarshalError("Marshal.Unmarshal: dest is not a pointer to a struct")
+var ErrDestIsNil MarshalError = freeUnmarshalError("Marshal: dest is nil")
+var ErrNotPointerToStruct MarshalError = freeUnmarshalError("Marshal: value is not a pointer to a struct")
 
 // ErrInlineNotStruct indicates that a destination field that is to be inlined, but is not a struct.
 // Implements UnmarshalError.
 type ErrInlineNotStruct struct {
-	dest   string
-	parser string
-	tag    reflect.StructTag
+	field string
+	tag   reflect.StructTag
+
+	typ string
 }
 
-func (err ErrInlineNotStruct) Dest() string           { return err.dest }
-func (ErrInlineNotStruct) Source() string             { return "" }
-func (ErrInlineNotStruct) Parser() string             { return "" }
-func (ErrInlineNotStruct) Single() bool               { return false }
+func (err ErrInlineNotStruct) Field() string          { return err.field }
 func (err ErrInlineNotStruct) Tag() reflect.StructTag { return err.tag }
 
+func (ErrInlineNotStruct) Datum() string { return "" }
+
+func (err ErrInlineNotStruct) Typ() string { return err.typ }
+func (ErrInlineNotStruct) Kind() Kind      { return KindUndef }
+
 func (err ErrInlineNotStruct) Error() string {
-	return fmt.Sprintf("Marshal.Unmarshal: Destination field %s is to be inlined, but not a struct or pointer to struct", err.dest)
+	return fmt.Sprintf("Marshal.Unmarshal: Destination field %s is to be inlined, but not a struct or pointer to struct", err.field)
 }
 
-// ErrUnknownParser indicates that an unknown parser was encountered.
-// Implements UnmarshalError.
-type ErrUnknownParser struct {
-	dest, source, parser string
-	tag                  reflect.StructTag
-	cause                error
-}
+// ErrUnknownType indicates that an unknown typ was encountered.
+// Implements MarshalError.
+type ErrUnknownType struct {
+	field string
+	tag   reflect.StructTag
 
-func (err ErrUnknownParser) Dest() string           { return err.dest }
-func (err ErrUnknownParser) Source() string         { return err.source }
-func (err ErrUnknownParser) Parser() string         { return err.parser }
-func (ErrUnknownParser) Single() bool               { return false }
-func (err ErrUnknownParser) Tag() reflect.StructTag { return err.tag }
+	datum string
 
-func (err ErrUnknownParser) Error() string {
-	return fmt.Sprintf("Marshal.Unmarshal: Destination field %q has unknown parser %s: %s", err.dest, err.parser, err.cause.Error())
-}
-
-// Unwrap provides compatibility for Go 1.13 error chains
-func (err ErrUnknownParser) Unwrap() error { return err.cause }
-
-// ErrFailedToParseField indicates that Marshal.Unmarshal failed to read a field.
-// Implements UnmarshalError.
-type ErrFailedToParseField struct {
-	dest, source, parser string
-	single               bool
-	tag                  reflect.StructTag
+	typ string
 
 	cause error
 }
 
-func (err ErrFailedToParseField) Dest() string           { return err.dest }
-func (err ErrFailedToParseField) Source() string         { return err.source }
-func (err ErrFailedToParseField) Parser() string         { return err.parser }
-func (err ErrFailedToParseField) Single() bool           { return err.single }
-func (err ErrFailedToParseField) Tag() reflect.StructTag { return err.tag }
+func (err ErrUnknownType) Field() string          { return err.field }
+func (err ErrUnknownType) Tag() reflect.StructTag { return err.tag }
 
-// Unwrap provides compatibility for Go 1.13 error chains.
-func (err ErrFailedToParseField) Unwrap() error { return err.cause }
+func (err ErrUnknownType) Datum() string { return err.datum }
 
-func (err ErrFailedToParseField) Error() string {
-	return fmt.Sprintf("Marshal.Unmarshal: Failed to parse field %q: %s", err.dest, err.cause.Error())
+func (err ErrUnknownType) Typ() string { return err.typ }
+func (ErrUnknownType) Kind() Kind      { return KindUndef }
+
+func (err ErrUnknownType) Unwrap() error { return err.cause }
+func (err ErrUnknownType) Error() string {
+	return fmt.Sprintf("Marshal.Unmarshal: Destination field %q has unknown type %s: %s", err.field, err.typ, err.cause.Error())
+}
+
+// ErrFailedToProcessField indicates that Marshal failed to process a field.
+// Implements MarshalError.
+type ErrFailedToProcessField struct {
+	field string
+	tag   reflect.StructTag
+
+	datum string
+
+	typ  string
+	kind Kind
+
+	cause error
+}
+
+func (err ErrFailedToProcessField) Field() string          { return err.field }
+func (err ErrFailedToProcessField) Tag() reflect.StructTag { return err.tag }
+
+func (err ErrFailedToProcessField) Datum() string { return err.datum }
+
+func (err ErrFailedToProcessField) Typ() string { return err.typ }
+func (err ErrFailedToProcessField) Kind() Kind  { return err.kind }
+
+func (err ErrFailedToProcessField) Unwrap() error { return err.cause }
+func (err ErrFailedToProcessField) Error() string {
+	return fmt.Sprintf("Marshal.Unmarshal: Failed to process field %q: %s", err.field, err.cause.Error())
 }
 
 // ErrWrongDestType intends that the returned value can not be assigned or converted to the destination field.
 // Implements UnmarshalError.
 type ErrWrongDestType struct {
-	dest, source, parser string
-	single               bool
-	tag                  reflect.StructTag
+	field string
+	tag   reflect.StructTag
+
+	datum string
+
+	typ  string
+	kind Kind
 
 	Assignment   bool // indicates if the failed operation was an assignment or converstion
 	ReturnedType reflect.Type
@@ -110,11 +121,13 @@ type ErrWrongDestType struct {
 	cause error
 }
 
-func (err ErrWrongDestType) Dest() string           { return err.dest }
-func (err ErrWrongDestType) Source() string         { return err.source }
-func (err ErrWrongDestType) Parser() string         { return err.parser }
-func (err ErrWrongDestType) Single() bool           { return err.single }
+func (err ErrWrongDestType) Field() string          { return err.field }
 func (err ErrWrongDestType) Tag() reflect.StructTag { return err.tag }
+
+func (err ErrWrongDestType) Datum() string { return err.datum }
+
+func (err ErrWrongDestType) Typ() string { return err.typ }
+func (err ErrWrongDestType) Kind() Kind  { return err.kind }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
 func (err ErrWrongDestType) Unwrap() error { return err.cause }
@@ -130,10 +143,10 @@ func (err ErrWrongDestType) Error() string {
 	} else {
 		verb = "convert"
 	}
-	return fmt.Sprintf("Marshal.Unmarshal: Failed to process value for field %q: Parser returned type %s, but cannot %s to %s%s", err.dest, err.ReturnedType, err.DestType, verb, suffix)
+	return fmt.Sprintf("Marshal: Failed to process value for field %q: Got type %s, but cannot %s to %s%s", err.field, err.ReturnedType, err.DestType, verb, suffix)
 }
 
 // the errors below never have any information associated with it.
 
-var ErrUnknownParserType = errors.New("Marshal.Unmarshal: unknown parser type")
-var ErrBothParserType = errors.New("Marshal.Unmarshal: parser type in both Single and Multi")
+var ErrUnknownTyp = errors.New("Marshal: unknown type")
+var ErrBothTyp = errors.New("Marshal: type found in both Single and Multi")

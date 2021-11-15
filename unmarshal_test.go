@@ -12,22 +12,22 @@ import (
 
 func TestMarshal_UnmarshalSingle(t *testing.T) {
 
-	// setupparser resets the parsers for m
-	reset_parsers := func(m *stringreader.Marshal) {
+	// reset_unmarshalers resets the unmarshalers for m
+	reset_unmarshalers := func(m *stringreader.Marshal) {
 		m.SingleUnmarshalers = nil
 		m.MultiUnmarshalers = nil
 
-		m.RegisterSingleParser("always", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+		m.RegisterSingleUnmarshaler("always", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 			return value, nil
 		})
-		m.RegisterSingleParser("default", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+		m.RegisterSingleUnmarshaler("default", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 			return "default", nil
 		})
-		m.RegisterSingleParser("special", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+		m.RegisterSingleUnmarshaler("special", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 			return fmt.Sprintf("special:%q", value), nil
 		})
-		m.RegisterSingleParser("never", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
-			return nil, errors.New("never parser")
+		m.RegisterSingleUnmarshaler("never", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
+			return nil, errors.New("never unmarshaler")
 		})
 	}
 
@@ -42,50 +42,50 @@ func TestMarshal_UnmarshalSingle(t *testing.T) {
 			name: "complete test",
 			marshal: stringreader.Marshal{
 				NameTag:       "name",
-				ParserTag:     "parser",
-				DefaultParser: "always",
+				TypeTag:       "type",
+				DefaultType:   "always",
 				StrictNameTag: false,
 				StrictTyping:  false,
 			},
 			src: map[string]string{
-				"NoTag":     "no-tag",
-				"ParserTag": "parser-tag",
-				"name":      "name-tag",
-				"special":   "special value",
+				"NoTag":   "no-tag",
+				"TypeTag": "type-tag",
+				"name":    "name-tag",
+				"special": "special value",
 			},
 			wantDest: struct {
-				NoTag            string
-				ParserTag        string `parser:"always"`
-				NameTag          string `name:"name"`
-				ParserAndNameTag string `parser:"special" name:"special"`
+				NoTag          string
+				TypeTag        string `type:"always"`
+				NameTag        string `name:"name"`
+				TypeAndNameTag string `type:"special" name:"special"`
 			}{
-				NoTag:            "no-tag",
-				ParserTag:        "parser-tag",
-				NameTag:          "name-tag",
-				ParserAndNameTag: "special:\"special value\"",
+				NoTag:          "no-tag",
+				TypeTag:        "type-tag",
+				NameTag:        "name-tag",
+				TypeAndNameTag: "special:\"special value\"",
 			},
 		},
 		{
-			name: "no default parser skips untagged fields",
+			name: "no default type skips untagged fields",
 			marshal: stringreader.Marshal{
 				NameTag:       "name",
-				ParserTag:     "parser",
+				TypeTag:       "type",
 				StrictNameTag: false,
 				StrictTyping:  false,
 			},
 			src: map[string]string{
-				"ParserTag": "parser-tag-value",
-				"name":      "name-tag-value",
-				"special":   "special-value",
+				"TypeTag": "type-tag-value",
+				"name":    "name-tag-value",
+				"special": "special-value",
 			},
 			wantDest: struct {
-				NoTag            string
-				NameTag          string `name:"name"`
-				ParserTag        string `parser:"always"`
-				ParserAndNameTag string `parser:"special" name:"special"`
+				NoTag          string
+				NameTag        string `name:"name"`
+				TypeTag        string `type:"always"`
+				TypeAndNameTag string `type:"special" name:"special"`
 			}{
-				ParserTag:        "parser-tag-value",
-				ParserAndNameTag: "special:\"special-value\"",
+				TypeTag:        "type-tag-value",
+				TypeAndNameTag: "special:\"special-value\"",
 			},
 		},
 	}
@@ -93,7 +93,7 @@ func TestMarshal_UnmarshalSingle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := tt.marshal
-			reset_parsers(&m)
+			reset_unmarshalers(&m)
 
 			// create a new element of the dest type!
 			target := reflect.TypeOf(tt.wantDest)
@@ -125,8 +125,8 @@ func ExampleMarshal_UnmarshalSingle_simple() {
 	marshal := &stringreader.Marshal{
 		NameTag: "read",
 
-		ParserTag:     "type",
-		DefaultParser: "string",
+		TypeTag:     "type",
+		DefaultType: "string",
 	}
 
 	// UserProfile is an example struct to be unmarshaled below.
@@ -141,13 +141,13 @@ func ExampleMarshal_UnmarshalSingle_simple() {
 
 	// the "string" type accepts any string, and falls back to the empty string if it does not exist.
 	// it is the default.
-	marshal.RegisterSingleParser("string", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+	marshal.RegisterSingleUnmarshaler("string", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 		return value, nil
 	})
 
 	// the "port" type parses a port number.
 	// It returns port 22
-	marshal.RegisterSingleParser("port", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+	marshal.RegisterSingleUnmarshaler("port", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 		// if no port was provided, use port 22
 		if !ok {
 			return 22, nil
@@ -201,14 +201,14 @@ func ExampleMarshal_UnmarshalSingle_nil() {
 	marshal := &stringreader.Marshal{
 		NameTag: "read",
 
-		ParserTag:     "type",
-		DefaultParser: "string",
+		TypeTag:     "type",
+		DefaultType: "string",
 	}
 
 	type TheType struct {
 		Value []string `type:"nilstringslice"`
 	}
-	marshal.RegisterSingleParser("nilstringslice", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+	marshal.RegisterSingleUnmarshaler("nilstringslice", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 		return nil, nil
 	})
 
@@ -228,8 +228,8 @@ func ExampleMarshal_UnmarshalSingle_recursive() {
 	marshal := &stringreader.Marshal{
 		NameTag: "read",
 
-		ParserTag:    "type",
-		InlineParser: "inline",
+		TypeTag:    "type",
+		InlineType: "inline",
 	}
 
 	// create three different nested structs.
@@ -248,7 +248,7 @@ func ExampleMarshal_UnmarshalSingle_recursive() {
 		Preset int
 	}
 
-	// create a new type, and register the string parser.
+	// create a new type, and register the string unmarshalers.
 	// Inline the three nested structs
 	type TheType struct {
 		Plain         string                    `read:"plain" type:"string"`
@@ -256,7 +256,7 @@ func ExampleMarshal_UnmarshalSingle_recursive() {
 		NilPointer    *WithIndirectionButNil    `type:"inline"`
 		NonNilPointer *WithIndirectionButNotNil `type:"inline"`
 	}
-	marshal.RegisterSingleParser("string", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
+	marshal.RegisterSingleUnmarshaler("string", func(value string, ok bool, ctx stringreader.Context) (interface{}, error) {
 		return value, nil
 	})
 

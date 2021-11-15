@@ -8,16 +8,16 @@ import (
 )
 
 // Marshal can marshal and unmarshal data from a string-to-string hashmap
-// See the UnmarshalState function for details.
+// See the State function for details.
 type Marshal struct {
 	NameTag       string // Optional, tag to read name from
 	StrictNameTag bool   // When false, allow fallback to field name
 
-	ParserTag     string // tag to read parser from
-	DefaultParser string // default parser to fall back to (optional)
-	InlineParser  string // parser name to use for recursive struct parsing (optional)
+	TypeTag     string // tag to read type from
+	DefaultType string // default type to fall back to (optional)
+	InlineType  string // type name to use for recursive struct parsing (optional)
 
-	// Known set of parsers
+	// Known set of unmarshalers
 	SingleUnmarshalers map[string]SingleUnmarshaler
 	MultiUnmarshalers  map[string]MultiUnmarshaler
 
@@ -26,59 +26,59 @@ type Marshal struct {
 }
 
 // SingleUnmarshaler is a function that unmarshals a single value
-type SingleUnmarshaler = func(value string, ok bool, ctx UnmarshalContext) (interface{}, error)
+type SingleUnmarshaler = func(value string, ok bool, ctx Context) (interface{}, error)
 
 // MultiUnmarshaler is a function that parses multiple values
-type MultiUnmarshaler = func(value []string, ok bool, ctx UnmarshalContext) (interface{}, error)
+type MultiUnmarshaler = func(value []string, ok bool, ctx Context) (interface{}, error)
 
-// a pool to receive UnmarshalContext objects from.
+// a pool to receive Context objects from.
 var contextPool = &sync.Pool{
 	New: func() interface{} {
-		return new(unmarshalContext)
+		return new(context)
 	},
 }
 
-// Unmarshal unmarshals data from source into dest.
+// Unmarshal unmarshals data from source into value.
 // Any non-nil error returned implements UnmarshalError.
 //
-// Dest must be a pointer to a struct; if this is not the case, ErrDestIsNil or ErrNotPointerToStruct is returned.
+// value must be a pointer to a struct; if this is not the case, ErrvalueIsNil or ErrNotPointerToStruct is returned.
 //
-// Data is unmarshaled from source to dest as follows:
+// Data is unmarshaled from source to value as follows:
 //
 // For each public field, the go tags are examined.
 //
-// When m.InlineParser is non-empty and m.ParserTag is non-empty and the parser tag equals the inline tag, atttempt
+// When m.InlineType is non-empty and m.TypeTag is non-empty and the type tag equals the inline tag, atttempt
 // to recursivly calls Unmarshal with the same source and data.
-// When the field type is a struct, the field value can be used as a new dest.
-// When the field type is a pointer to a struct, create a new zero value (when needed) for the provided type and then use it as a dest.
+// When the field type is a struct, the field value can be used as a new value.
+// When the field type is a pointer to a struct, create a new zero value (when needed) for the provided type and then use it as a value.
 // When the field type is none of the above, return ErrInlineNotStruct.
 //
 // When m.NameTag is non-empty, data from the specified name is read from source.
 // When m.NameTag does not exist, and m.StrictNameTag is true, the field is skipped.
 // When m.NameTag does not exist and m.StrictNameTag is false, data from the name of the field is read from source.
 //
-// When m.ParserTag is non-empty, the value and ok are passed to the defined function in m.SingleParsers or m.MultiParsers.
-// When m.ParserTag is empty, and m.DefaultParser is non-empty, the value and ok are passed to the default function in m.SingleParsers or m.MultiParsers.
-// When m.ParserTag is empty, and m.DefaultParser is empty, or the referenced parser function does not exist, an error is returned.
-// When a parser exists in both m.SingleParsers and m.MultiParsers, an error is returned.
-// When calling a parsing context, the ctx argument is passed to it unchanged.
+// When m.TypeTag is non-empty, the value and ok are passed to the defined function in m.SingleUnmarshalers or m.MultiUnmarshalers.
+// When m.TypeTag is empty, and m.DefaultType is non-empty, the value and ok are passed to the default function in m.SingleUnmarshalers or m.MultiUnmarshalers.
+// When m.TypeTag is empty, and m.DefaultType is empty, or the referenced unmarshaler function does not exist, an error is returned.
+// When an unmarshaler exists in both m.SingleUnmarshalers and m.MultiUnmarshalers, an error is returned.
+// When calling an unmarshaler, the data argument is passed to an appropriate context.
 //
-// When the Parser function returns a value and nil error, it is written into the specified field of dest.
+// When the Unmarshaler function returns a value and nil error, it is written into the specified field of value.
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
-func (m Marshal) Unmarshal(dest interface{}, source Source, data UnmarshalerData) error {
-	return m.unmarshal(dest, source, data)
+func (m Marshal) Unmarshal(value interface{}, source Source, data Data) error {
+	return m.unmarshal(value, source, data)
 }
 
-// unmarshal implements Unmarshal
-func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData) UnmarshalError {
-	if dest == nil {
+// unmarshal implements Unmarshal, ensuring that an UnmarshalError is returned
+func (m Marshal) unmarshal(value interface{}, source Source, data Data) MarshalError {
+	if value == nil {
 		return ErrDestIsNil
 	}
 
-	// ensure that the destination is a pointer to a struct
+	// ensure that the valueination is a pointer to a struct
 	// and then use the pointer itself
-	dValue := reflect.ValueOf(dest)
+	dValue := reflect.ValueOf(value)
 	dType := dValue.Type()
 	if dType == nil || dType.Kind() != reflect.Ptr {
 		return ErrNotPointerToStruct
@@ -91,7 +91,7 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 
 	// grab a new context item from the pool
 	// and store context data with it.
-	ctx := contextPool.Get().(*unmarshalContext)
+	ctx := contextPool.Get().(*context)
 	defer contextPool.Put(ctx)
 
 	ctx.data = data
@@ -104,22 +104,22 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 		fValue := dValue.Field(i)
 
 		fType := fStructField.Type
-		ctx.dest = fStructField.Name
+		ctx.field = fStructField.Name
 		ctx.tag = fStructField.Tag
 
-		// determine the type of parser to run
+		// determine the type to use
 		// using the default type when necessary
-		ctx.parser = fStructField.Tag.Get(m.ParserTag)
-		if ctx.parser == "" {
-			if m.DefaultParser == "" {
+		ctx.typ = fStructField.Tag.Get(m.TypeTag)
+		if ctx.typ == "" {
+			if m.DefaultType == "" {
 				continue
 			}
-			ctx.parser = m.DefaultParser
+			ctx.typ = m.DefaultType
 		}
 
-		// check if the inline parser is being requested.
+		// check if the inline type is being requested.
 		// and if so, do the inlining.
-		if m.InlineParser != "" && ctx.parser == m.InlineParser {
+		if m.InlineType != "" && ctx.typ == m.InlineType {
 			var fieldPointer interface{}
 
 			switch fType.Kind() {
@@ -133,9 +133,10 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 				fType = fType.Elem()
 				if fType.Kind() != reflect.Struct {
 					return ErrInlineNotStruct{
-						dest:   ctx.dest,
-						parser: ctx.parser,
-						tag:    ctx.tag,
+						field: ctx.field,
+						tag:   ctx.tag,
+
+						typ: ctx.typ,
 					}
 				}
 
@@ -148,9 +149,10 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 				fieldPointer = fValue.Interface()
 			default:
 				return ErrInlineNotStruct{
-					dest:   ctx.dest,
-					tag:    ctx.tag,
-					parser: ctx.parser,
+					field: ctx.field,
+					tag:   ctx.tag,
+
+					typ: ctx.typ,
 				}
 			}
 
@@ -163,22 +165,24 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 
 		// determine which field to look at from the source
 		// use default when needed
-		ctx.source = fStructField.Tag.Get(m.NameTag)
-		if ctx.source == "" {
+		ctx.datum = fStructField.Tag.Get(m.NameTag)
+		if ctx.datum == "" {
 			if m.StrictNameTag {
 				continue
 			}
-			ctx.source = fStructField.Name
+			ctx.datum = fStructField.Name
 		}
 
-		// figure out if we have a single or a multi parser
-		singleParser, multiParser, err := m.getUnmarshaler(ctx.parser)
+		// figure out if we have a single or a multi unmarshaler
+		single, multi, err := m.getUnmarshaler(ctx.typ)
 		if err != nil {
-			return ErrUnknownParser{
-				dest:   ctx.dest,
-				source: ctx.source,
-				parser: ctx.parser,
-				tag:    ctx.tag,
+			return ErrUnknownType{
+				field: ctx.field,
+				tag:   ctx.tag,
+
+				datum: ctx.datum,
+
+				typ: ctx.typ,
 
 				cause: err,
 			}
@@ -189,24 +193,26 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 		var pErr error
 
 		switch {
-		case singleParser != nil:
-			rValue, rOK := source.Lookup(ctx.source)
-			ctx.single = true
+		case single != nil:
+			rValue, rOK := source.Lookup(ctx.datum)
+			ctx.kind = KindSingleUnmarshaler
 
-			pValue, pErr = singleParser(rValue, rOK, ctx)
-		case multiParser != nil:
-			rValue, rOK := source.LookupAll(ctx.source)
-			ctx.single = false
+			pValue, pErr = single(rValue, rOK, ctx)
+		case multi != nil:
+			rValue, rOK := source.LookupAll(ctx.datum)
+			ctx.kind = KindMultiUnmarshaler
 
-			pValue, pErr = multiParser(rValue, rOK, ctx)
+			pValue, pErr = multi(rValue, rOK, ctx)
 		}
 		if pErr != nil {
-			return ErrFailedToParseField{
-				dest:   ctx.dest,
-				source: ctx.source,
-				parser: ctx.parser,
-				single: ctx.single,
-				tag:    ctx.tag,
+			return ErrFailedToProcessField{
+				field: ctx.field,
+				tag:   ctx.tag,
+
+				datum: ctx.datum,
+
+				typ:  ctx.typ,
+				kind: ctx.kind,
 
 				cause: pErr,
 			}
@@ -221,11 +227,13 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 				// convert the value to the proper type!
 				if !rValue.CanConvert(fType) {
 					return ErrWrongDestType{
-						dest:   ctx.dest,
-						source: ctx.source,
-						parser: ctx.parser,
-						single: ctx.single,
-						tag:    ctx.tag,
+						field: ctx.field,
+						tag:   ctx.tag,
+
+						datum: ctx.datum,
+
+						typ:  ctx.typ,
+						kind: ctx.kind,
 
 						Assignment:   false,
 						ReturnedType: rValue.Type(),
@@ -237,11 +245,13 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 				rValue, err = reflectConvert(rValue, fType)
 				if err != nil {
 					return ErrWrongDestType{
-						dest:   ctx.dest,
-						source: ctx.source,
-						parser: ctx.parser,
-						single: ctx.single,
-						tag:    ctx.tag,
+						field: ctx.field,
+						tag:   ctx.tag,
+
+						datum: ctx.datum,
+
+						typ:  ctx.typ,
+						kind: ctx.kind,
 
 						Assignment:   false,
 						ReturnedType: rValue.Type(),
@@ -263,11 +273,13 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 		// we are already safe when we converterd
 		if m.StrictTyping && !rValue.Type().AssignableTo(fType) {
 			return ErrWrongDestType{
-				dest:   ctx.dest,
-				source: ctx.source,
-				parser: ctx.parser,
-				single: ctx.single,
-				tag:    ctx.tag,
+				field: ctx.field,
+				tag:   ctx.tag,
+
+				datum: ctx.datum,
+
+				typ:  ctx.typ,
+				kind: ctx.kind,
 
 				Assignment:   true,
 				ReturnedType: rValue.Type(),
@@ -280,9 +292,9 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData
 	return nil
 }
 
-// UnmarshalAll is like UnmarshalState, but with a nil context
-func (m Marshal) UnmarshalAll(dest interface{}, source Source) error {
-	return m.Unmarshal(dest, source, UnmarshalerData{})
+// UnmarshalAll is like State, but with a nil context
+func (m Marshal) UnmarshalAll(value interface{}, source Source) error {
+	return m.Unmarshal(value, source, Data{})
 }
 
 // reflectConvert converts rValue to rType, and catches any panic that occurs
@@ -297,13 +309,13 @@ func reflectConvert(rValue reflect.Value, rType reflect.Type) (v reflect.Value, 
 }
 
 // UnmarshalSingle is like Unmarshal, except that it pretends the multi fields for source do not exist
-func (m Marshal) UnmarshalSingle(dest interface{}, source SourceSingle) error {
-	return m.UnmarshalAll(dest, SourceSplit{SourceSingle: source})
+func (m Marshal) UnmarshalSingle(value interface{}, source SourceSingle) error {
+	return m.UnmarshalAll(value, SourceSplit{SourceSingle: source})
 }
 
 // UnmarshalMulti is like Unmarshal, except that it pretends the single fields for source do not exist
-func (m Marshal) UnmarshalMulti(dest interface{}, source SourceMulti) error {
-	return m.UnmarshalAll(dest, SourceSplit{SourceMulti: source})
+func (m Marshal) UnmarshalMulti(value interface{}, source SourceMulti) error {
+	return m.UnmarshalAll(value, SourceSplit{SourceMulti: source})
 }
 
 // getUnmarshaler finds either a single or multi unmarshaler, and performs appropriate error checking
@@ -319,34 +331,34 @@ func (m Marshal) getUnmarshaler(name string) (single SingleUnmarshaler, multi Mu
 
 	// ensure that we have exactly one value, or fail
 	if singleOK && multiOK {
-		return nil, nil, ErrBothParserType
+		return nil, nil, ErrBothTyp
 	}
 
 	if !(singleOK || multiOK) {
-		return nil, nil, ErrUnknownParserType
+		return nil, nil, ErrUnknownTyp
 	}
 
 	return
 }
 
-// RegisterSingleParser registers a new SingleParser with m.
+// RegisterSingleUnmarshaler registers a new SingleUnmarshaler with m.
 //
-// Parser should not be nil, and should not exist in m.MultiParsers.
+// unmarshaler should not be nil, and should not exist in m.MultiUnmarshalers.
 // No checking of these conditions is performed; they should be ensured by the caller.
-func (m *Marshal) RegisterSingleParser(name string, parser SingleUnmarshaler) {
+func (m *Marshal) RegisterSingleUnmarshaler(name string, unmarshaler SingleUnmarshaler) {
 	if m.SingleUnmarshalers == nil {
 		m.SingleUnmarshalers = make(map[string]SingleUnmarshaler)
 	}
-	m.SingleUnmarshalers[name] = parser
+	m.SingleUnmarshalers[name] = unmarshaler
 }
 
-// RegisterSingleParser registers a new MultiParser with m.
+// RegisterSingleUnmarshaler registers a new MultiUnmarshaler with m.
 //
-// Parser should not be nil, and should not exist in m.SingleParsers.
+// unmarshaler should not be nil, and should not exist in m.SingleUnmarshalers.
 // No checking of these conditions is performed; they should be ensured by the caller.
-func (m *Marshal) RegisterMultiParser(name string, parser MultiUnmarshaler) {
+func (m *Marshal) RegisterMultiUnmarshaler(name string, unmarshaler MultiUnmarshaler) {
 	if m.MultiUnmarshalers == nil {
 		m.MultiUnmarshalers = make(map[string]MultiUnmarshaler)
 	}
-	m.MultiUnmarshalers[name] = parser
+	m.MultiUnmarshalers[name] = unmarshaler
 }
