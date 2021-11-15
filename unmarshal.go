@@ -18,18 +18,18 @@ type Marshal struct {
 	InlineParser  string // parser name to use for recursive struct parsing (optional)
 
 	// Known set of parsers
-	SingleParsers map[string]SingleParser
-	MultiParsers  map[string]MultiParser
+	SingleUnmarshalers map[string]SingleUnmarshaler
+	MultiUnmarshalers  map[string]MultiUnmarshaler
 
 	// Use StrictTyping to prevent auto-conversion of returned values
 	StrictTyping bool
 }
 
-// SingleParser is a function that parses a single value
-type SingleParser = func(value string, ok bool, ctx UnmarshalContext) (interface{}, error)
+// SingleUnmarshaler is a function that unmarshals a single value
+type SingleUnmarshaler = func(value string, ok bool, ctx UnmarshalContext) (interface{}, error)
 
-// MultiParser is a function that parses multiple values
-type MultiParser = func(value []string, ok bool, ctx UnmarshalContext) (interface{}, error)
+// MultiUnmarshaler is a function that parses multiple values
+type MultiUnmarshaler = func(value []string, ok bool, ctx UnmarshalContext) (interface{}, error)
 
 // a pool to receive UnmarshalContext objects from.
 var contextPool = &sync.Pool{
@@ -66,12 +66,12 @@ var contextPool = &sync.Pool{
 // When the Parser function returns a value and nil error, it is written into the specified field of dest.
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
-func (m Marshal) Unmarshal(dest interface{}, source Source, data ParsingData) error {
+func (m Marshal) Unmarshal(dest interface{}, source Source, data UnmarshalerData) error {
 	return m.unmarshal(dest, source, data)
 }
 
 // unmarshal implements Unmarshal
-func (m Marshal) unmarshal(dest interface{}, source Source, data ParsingData) UnmarshalError {
+func (m Marshal) unmarshal(dest interface{}, source Source, data UnmarshalerData) UnmarshalError {
 	if dest == nil {
 		return ErrDestIsNil
 	}
@@ -172,7 +172,7 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data ParsingData) Un
 		}
 
 		// figure out if we have a single or a multi parser
-		singleParser, multiParser, err := m.GetParser(ctx.parser)
+		singleParser, multiParser, err := m.getUnmarshaler(ctx.parser)
 		if err != nil {
 			return ErrUnknownParser{
 				dest:   ctx.dest,
@@ -282,7 +282,7 @@ func (m Marshal) unmarshal(dest interface{}, source Source, data ParsingData) Un
 
 // UnmarshalAll is like UnmarshalState, but with a nil context
 func (m Marshal) UnmarshalAll(dest interface{}, source Source) error {
-	return m.Unmarshal(dest, source, ParsingData{})
+	return m.Unmarshal(dest, source, UnmarshalerData{})
 }
 
 // reflectConvert converts rValue to rType, and catches any panic that occurs
@@ -306,13 +306,13 @@ func (m Marshal) UnmarshalMulti(dest interface{}, source SourceMulti) error {
 	return m.UnmarshalAll(dest, SourceSplit{SourceMulti: source})
 }
 
-// GetParser finds either a single or multi parser, and performs appropriate error checking
-func (m Marshal) GetParser(name string) (single SingleParser, multi MultiParser, err error) {
+// getUnmarshaler finds either a single or multi unmarshaler, and performs appropriate error checking
+func (m Marshal) getUnmarshaler(name string) (single SingleUnmarshaler, multi MultiUnmarshaler, err error) {
 	var singleOK, multiOK bool
 
-	// find non-nil values in the parsers!
-	single, singleOK = m.SingleParsers[name]
-	multi, multiOK = m.MultiParsers[name]
+	// find non-nil values in the unmarshalers!
+	single, singleOK = m.SingleUnmarshalers[name]
+	multi, multiOK = m.MultiUnmarshalers[name]
 
 	singleOK = singleOK && single != nil
 	multiOK = multiOK && multi != nil
@@ -333,20 +333,20 @@ func (m Marshal) GetParser(name string) (single SingleParser, multi MultiParser,
 //
 // Parser should not be nil, and should not exist in m.MultiParsers.
 // No checking of these conditions is performed; they should be ensured by the caller.
-func (m *Marshal) RegisterSingleParser(name string, parser SingleParser) {
-	if m.SingleParsers == nil {
-		m.SingleParsers = make(map[string]SingleParser)
+func (m *Marshal) RegisterSingleParser(name string, parser SingleUnmarshaler) {
+	if m.SingleUnmarshalers == nil {
+		m.SingleUnmarshalers = make(map[string]SingleUnmarshaler)
 	}
-	m.SingleParsers[name] = parser
+	m.SingleUnmarshalers[name] = parser
 }
 
 // RegisterSingleParser registers a new MultiParser with m.
 //
 // Parser should not be nil, and should not exist in m.SingleParsers.
 // No checking of these conditions is performed; they should be ensured by the caller.
-func (m *Marshal) RegisterMultiParser(name string, parser MultiParser) {
-	if m.MultiParsers == nil {
-		m.MultiParsers = make(map[string]MultiParser)
+func (m *Marshal) RegisterMultiParser(name string, parser MultiUnmarshaler) {
+	if m.MultiUnmarshalers == nil {
+		m.MultiUnmarshalers = make(map[string]MultiUnmarshaler)
 	}
-	m.MultiParsers[name] = parser
+	m.MultiUnmarshalers[name] = parser
 }

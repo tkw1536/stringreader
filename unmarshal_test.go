@@ -14,8 +14,8 @@ func TestMarshal_UnmarshalSingle(t *testing.T) {
 
 	// setupparser resets the parsers for m
 	reset_parsers := func(m *stringreader.Marshal) {
-		m.SingleParsers = nil
-		m.MultiParsers = nil
+		m.SingleUnmarshalers = nil
+		m.MultiUnmarshalers = nil
 
 		m.RegisterSingleParser("always", func(value string, ok bool, ctx stringreader.UnmarshalContext) (interface{}, error) {
 			return value, nil

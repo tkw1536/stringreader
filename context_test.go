@@ -2,8 +2,8 @@ package stringreader
 
 import "fmt"
 
-func ExampleParsingData() {
-	var data ParsingData
+func ExampleUnmarshalerData() {
+	var data UnmarshalerData
 
 	// set a global and local key
 	data.SetGlobal("world", 42)

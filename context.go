@@ -3,22 +3,22 @@ package stringreader
 import "reflect"
 
 // UnmarshalContext holds contextual data that is passed to parsers.
-// It contains an internal reference to a ParsingData object.
+// It contains an internal reference to a UnmarshalerData object.
 //
 // Parsers should not retain references to UnmarshalContext, as it might be re-used between parsers.
 // See also SingleParser, MultiParser.
 type UnmarshalContext interface {
 	UnmarshalState
 
-	// Get returns a local datum associated to the current destination from the underlying ParsingData object.
+	// Get returns a local datum associated to the current destination from the underlying UnmarshalerData object.
 	Get(key string) interface{}
 
-	// GetGlobal returns a global datum from the underlying ParsingData object.
+	// GetGlobal returns a global datum from the underlying UnmarshalerData object.
 	GetGlobal(key string) interface{}
 }
 
 // UnmarshalState holds the current state of the unmarshaling process.
-// It does not hold any references to ParsingData objects.
+// It does not hold any references to UnmarshalerData objects.
 type UnmarshalState interface {
 	// Dest returns the name of the destination field that is being written to.
 	// When no destination is being written, returns the empty string.
@@ -38,12 +38,12 @@ type UnmarshalState interface {
 	Tag() reflect.StructTag
 }
 
-// ParsingData holds contextual data for parsers.
+// UnmarshalerData holds contextual data for parsers.
 // Data is keyed by strings.
 // The zero value is ready-to-use.
 //
 // See also UnmarshalContext on how this data is accessed.
-type ParsingData struct {
+type UnmarshalerData struct {
 	// Globals holds data not associated to a specific field during parsing.
 	// Each datum is keyed by a simple string.
 	Globals map[string]interface{}
@@ -55,7 +55,7 @@ type ParsingData struct {
 }
 
 // SetGlobal sets the global datum identified by key to value.
-func (p *ParsingData) SetGlobal(key string, value interface{}) {
+func (p *UnmarshalerData) SetGlobal(key string, value interface{}) {
 	if p.Globals == nil {
 		p.Globals = make(map[string]interface{})
 	}
@@ -63,7 +63,7 @@ func (p *ParsingData) SetGlobal(key string, value interface{}) {
 }
 
 // DeleteGlobal deletes the provided global datum identified by key.
-func (p *ParsingData) DeleteGlobal(key string) {
+func (p *UnmarshalerData) DeleteGlobal(key string) {
 	if p.Globals == nil {
 		return
 	}
@@ -71,7 +71,7 @@ func (p *ParsingData) DeleteGlobal(key string) {
 }
 
 // SetLocal sets the local datum for field identified by key to value.
-func (p *ParsingData) SetLocal(field, key string, value interface{}) {
+func (p *UnmarshalerData) SetLocal(field, key string, value interface{}) {
 	if p.Locals == nil {
 		p.Locals = make(map[string]map[string]interface{})
 	}
@@ -82,7 +82,7 @@ func (p *ParsingData) SetLocal(field, key string, value interface{}) {
 }
 
 // DeleteLocal deletes the provided local datum identified.
-func (p *ParsingData) DeleteLocal(field, key string) {
+func (p *UnmarshalerData) DeleteLocal(field, key string) {
 	locals, ok := p.Locals[field]
 	if !ok || locals == nil {
 		return
@@ -94,7 +94,7 @@ func (p *ParsingData) DeleteLocal(field, key string) {
 type unmarshalContext struct {
 	dest, source, parser string
 	single               bool
-	data                 ParsingData
+	data                 UnmarshalerData
 	tag                  reflect.StructTag
 }
 
@@ -102,7 +102,7 @@ type unmarshalContext struct {
 func (p *unmarshalContext) Reset() {
 	p.dest, p.source, p.parser = "", "", ""
 	p.single = false
-	p.data = ParsingData{}
+	p.data = UnmarshalerData{}
 }
 
 // The remainder of functions implement UnmarshalContext.
