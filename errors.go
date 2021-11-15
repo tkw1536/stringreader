@@ -10,7 +10,7 @@ import (
 // UnmarshalError is an error returned by the Unmarshal function.
 type UnmarshalError interface {
 	error
-	UnmarshalContext
+	UnmarshalState
 }
 
 // ensure that all the errors in this package implement UnmarshalError.

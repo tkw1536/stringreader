@@ -9,16 +9,16 @@ func ExampleSourceSingleMap() {
 	})
 
 	// get an existing key
-	keyValue, keyOK := source.Get("key")
-	fmt.Printf("source.Get(%q) value=%q ok=%t\n", "key", keyValue, keyOK)
+	keyValue, keyOK := source.Lookup("key")
+	fmt.Printf("source.Lookup(%q) value=%q ok=%t\n", "key", keyValue, keyOK)
 
 	// get a non-existing key
-	fakeValue, fakeOK := source.Get("fake")
-	fmt.Printf("source.Get(%q) value=%q ok=%t\n", "fake", fakeValue, fakeOK)
+	fakeValue, fakeOK := source.Lookup("fake")
+	fmt.Printf("source.Lookup(%q) value=%q ok=%t\n", "fake", fakeValue, fakeOK)
 
 	// Output:
-	// source.Get("key") value="value" ok=true
-	// source.Get("fake") value="" ok=false
+	// source.Lookup("key") value="value" ok=true
+	// source.Lookup("fake") value="" ok=false
 }
 
 func ExampleSourceMulti() {
@@ -28,16 +28,16 @@ func ExampleSourceMulti() {
 	})
 
 	// get an existing key
-	keyValue, keyOK := source.GetAll("key")
-	fmt.Printf("source.GetAll(%q) value=%v ok=%t\n", "key", keyValue, keyOK)
+	keyValue, keyOK := source.LookupAll("key")
+	fmt.Printf("source.LookupAll(%q) value=%v ok=%t\n", "key", keyValue, keyOK)
 
 	// get a non-existing key
-	fakeValue, fakeOK := source.GetAll("fake")
-	fmt.Printf("source.GetAll(%q) value=%v ok=%t\n", "fake", fakeValue, fakeOK)
+	fakeValue, fakeOK := source.LookupAll("fake")
+	fmt.Printf("source.LookupAll(%q) value=%v ok=%t\n", "fake", fakeValue, fakeOK)
 
 	// Output:
-	// source.GetAll("key") value=[another value] ok=true
-	// source.GetAll("fake") value=[] ok=false
+	// source.LookupAll("key") value=[another value] ok=true
+	// source.LookupAll("fake") value=[] ok=false
 }
 
 // Create a new SourceSplit consisting of a SourceSingle and SourceMulti.
@@ -52,23 +52,23 @@ func ExampleSourceSplit() {
 		}),
 	}
 
-	sKeyValue, sKeyOK := source.Get("key")
-	fmt.Printf("source.Get(%q) value=%q ok=%t\n", "key", sKeyValue, sKeyOK)
+	sKeyValue, sKeyOK := source.Lookup("key")
+	fmt.Printf("source.Lookup(%q) value=%q ok=%t\n", "key", sKeyValue, sKeyOK)
 
-	sFakeValue, sFakeOK := source.Get("fake")
-	fmt.Printf("source.Get(%q) value=%q ok=%t\n", "fake", sFakeValue, sFakeOK)
+	sFakeValue, sFakeOK := source.Lookup("fake")
+	fmt.Printf("source.Lookup(%q) value=%q ok=%t\n", "fake", sFakeValue, sFakeOK)
 
-	mKeyValue, mKeyOK := source.GetAll("key")
-	fmt.Printf("source.GetAll(%q) value=%v ok=%t\n", "key", mKeyValue, mKeyOK)
+	mKeyValue, mKeyOK := source.LookupAll("key")
+	fmt.Printf("source.LookupAll(%q) value=%v ok=%t\n", "key", mKeyValue, mKeyOK)
 
-	mFakeValue, mFakeOK := source.GetAll("fake")
-	fmt.Printf("source.GetAll(%q) value=%v ok=%t\n", "fake", mFakeValue, mFakeOK)
+	mFakeValue, mFakeOK := source.LookupAll("fake")
+	fmt.Printf("source.LookupAll(%q) value=%v ok=%t\n", "fake", mFakeValue, mFakeOK)
 
 	// Output:
-	// source.Get("key") value="value" ok=true
-	// source.Get("fake") value="" ok=false
-	// source.GetAll("key") value=[another value] ok=true
-	// source.GetAll("fake") value=[] ok=false
+	// source.Lookup("key") value="value" ok=true
+	// source.Lookup("fake") value="" ok=false
+	// source.LookupAll("key") value=[another value] ok=true
+	// source.LookupAll("fake") value=[] ok=false
 }
 
 // Creating an empty SourceSplit creates a source without any data inside of it.
@@ -78,21 +78,21 @@ func ExampleSourceSplit_empty() {
 
 	// read keys from the SourceSingle and SourceMulti components.
 
-	sKeyValue, sKeyOK := source.Get("key")
-	fmt.Printf("source.Get(%q) value=%q ok=%t\n", "key", sKeyValue, sKeyOK)
+	sKeyValue, sKeyOK := source.Lookup("key")
+	fmt.Printf("source.Lookup(%q) value=%q ok=%t\n", "key", sKeyValue, sKeyOK)
 
-	sFakeValue, sFakeOK := source.Get("fake")
-	fmt.Printf("source.Get(%q) value=%q ok=%t\n", "fake", sFakeValue, sFakeOK)
+	sFakeValue, sFakeOK := source.Lookup("fake")
+	fmt.Printf("source.Lookup(%q) value=%q ok=%t\n", "fake", sFakeValue, sFakeOK)
 
-	mKeyValue, mKeyOK := source.GetAll("key")
-	fmt.Printf("source.GetAll(%q) value=%v ok=%t\n", "key", mKeyValue, mKeyOK)
+	mKeyValue, mKeyOK := source.LookupAll("key")
+	fmt.Printf("source.LookupAll(%q) value=%v ok=%t\n", "key", mKeyValue, mKeyOK)
 
-	mFakeValue, mFakeOK := source.GetAll("fake")
-	fmt.Printf("source.GetAll(%q) value=%v ok=%t\n", "fake", mFakeValue, mFakeOK)
+	mFakeValue, mFakeOK := source.LookupAll("fake")
+	fmt.Printf("source.LookupAll(%q) value=%v ok=%t\n", "fake", mFakeValue, mFakeOK)
 
 	// Output:
-	// source.Get("key") value="" ok=false
-	// source.Get("fake") value="" ok=false
-	// source.GetAll("key") value=[] ok=false
-	// source.GetAll("fake") value=[] ok=false
+	// source.Lookup("key") value="" ok=false
+	// source.Lookup("fake") value="" ok=false
+	// source.LookupAll("key") value=[] ok=false
+	// source.LookupAll("fake") value=[] ok=false
 }

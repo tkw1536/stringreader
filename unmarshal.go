@@ -7,8 +7,8 @@ import (
 	"sync"
 )
 
-// Marshal can unmarshal data from a Source.
-// See the UnmarshalContext function for details.
+// Marshal can marshal and unmarshal data from a string-to-string hashmap
+// See the UnmarshalState function for details.
 type Marshal struct {
 	NameTag       string // Optional, tag to read name from
 	StrictNameTag bool   // When false, allow fallback to field name
@@ -26,19 +26,19 @@ type Marshal struct {
 }
 
 // SingleParser is a function that parses a single value
-type SingleParser = func(value string, ok bool, ctx ParsingContext) (interface{}, error)
+type SingleParser = func(value string, ok bool, ctx UnmarshalContext) (interface{}, error)
 
 // MultiParser is a function that parses multiple values
-type MultiParser = func(value []string, ok bool, ctx ParsingContext) (interface{}, error)
+type MultiParser = func(value []string, ok bool, ctx UnmarshalContext) (interface{}, error)
 
-// a pool to receive ParsingContext objects from.
+// a pool to receive UnmarshalContext objects from.
 var contextPool = &sync.Pool{
 	New: func() interface{} {
-		return new(parsingContext)
+		return new(unmarshalContext)
 	},
 }
 
-// UnmarshalContext unmarshals data from source into dest.
+// UnmarshalState unmarshals data from source into dest.
 // Any non-nil error returned implements UnmarshalError.
 //
 // Dest must be a pointer to a struct; if this is not the case, ErrDestIsNil or ErrNotPointerToStruct is returned.
@@ -48,7 +48,7 @@ var contextPool = &sync.Pool{
 // For each public field, the go tags are examined.
 //
 // When m.InlineParser is non-empty and m.ParserTag is non-empty and the parser tag equals the inline tag, atttempt
-// to recursivly calls UnmarshalContext with the same source and data.
+// to recursivly calls UnmarshalState with the same source and data.
 // When the field type is a struct, the field value can be used as a new dest.
 // When the field type is a pointer to a struct, create a new zero value (when needed) for the provided type and then use it as a dest.
 // When the field type is none of the above, return ErrInlineNotStruct.
@@ -66,7 +66,7 @@ var contextPool = &sync.Pool{
 // When the Parser function returns a value and nil error, it is written into the specified field of dest.
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
-func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingData) error {
+func (m Marshal) UnmarshalState(dest interface{}, source Source, data ParsingData) error {
 	if dest == nil {
 		return ErrDestIsNil
 	}
@@ -86,7 +86,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 	// grab a new context item from the pool
 	// and store context data with it.
-	ctx := contextPool.Get().(*parsingContext)
+	ctx := contextPool.Get().(*unmarshalContext)
 	defer contextPool.Put(ctx)
 
 	ctx.data = data
@@ -149,7 +149,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				}
 			}
 
-			err := m.UnmarshalContext(fieldPointer, source, data)
+			err := m.UnmarshalState(fieldPointer, source, data)
 			if err != nil {
 				return err
 			}
@@ -185,12 +185,12 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 		switch {
 		case singleParser != nil:
-			rValue, rOK := source.Get(ctx.source)
+			rValue, rOK := source.Lookup(ctx.source)
 			ctx.single = true
 
 			pValue, pErr = singleParser(rValue, rOK, ctx)
 		case multiParser != nil:
-			rValue, rOK := source.GetAll(ctx.source)
+			rValue, rOK := source.LookupAll(ctx.source)
 			ctx.single = false
 
 			pValue, pErr = multiParser(rValue, rOK, ctx)
@@ -275,9 +275,9 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 	return nil
 }
 
-// Unmarshal is like UnmarshalContext, but with a nil context
+// Unmarshal is like UnmarshalState, but with a nil context
 func (m Marshal) Unmarshal(dest interface{}, source Source) error {
-	return m.UnmarshalContext(dest, source, ParsingData{})
+	return m.UnmarshalState(dest, source, ParsingData{})
 }
 
 // reflectConvert converts rValue to rType, and catches any panic that occurs

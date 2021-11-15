@@ -16,23 +16,23 @@ type Source interface {
 // SourceSingle represents a source of data with each datum being a single string.
 // See also Source.
 type SourceSingle interface {
-	// Get attempts to read the datum with the provided key.
+	// Lookup attempts to read the datum with the provided key.
 	// Returns the value of the datum and and the value true.
 	//
 	// When the provided datum does not exist,
 	// or an error occurs attempting to read it, returns the empty string and false.
-	Get(key string) (value string, ok bool)
+	Lookup(key string) (value string, ok bool)
 }
 
 // SourceMulti represents a source of data with each datum being a single string.
 // See also Source.
 type SourceMulti interface {
-	// Get attempts to read the datum with the provided key.
-	// Returns the value of the datum and and the value true.
+	// LookupAll attempts to read the datum with the provided key.
+	// Returns the value of the datum and and the boolean true.
 	//
 	// When the provided datum does not exist,
 	// or an error occurs attempting to read it, returns nil and false.
-	GetAll(key string) (value []string, ok bool)
+	LookupAll(key string) (value []string, ok bool)
 }
 
 // SourceSplit represents a Source that consists of a SourceSingle and a SourceMulti.
@@ -44,24 +44,24 @@ type SourceSplit struct {
 	SourceMulti
 }
 
-func (s SourceSplit) Get(value string) (string, bool) {
+func (s SourceSplit) Lookup(value string) (string, bool) {
 	if s.SourceSingle == nil {
 		return "", false
 	}
-	return s.SourceSingle.Get(value)
+	return s.SourceSingle.Lookup(value)
 }
 
-func (s SourceSplit) GetAll(value string) ([]string, bool) {
+func (s SourceSplit) LookupAll(value string) ([]string, bool) {
 	if s.SourceMulti == nil {
 		return nil, false
 	}
-	return s.SourceMulti.GetAll(value)
+	return s.SourceMulti.LookupAll(value)
 }
 
 // SourceSingleMap implements SourceSingle.
 type SourceSingleMap map[string]string
 
-func (s SourceSingleMap) Get(src string) (value string, ok bool) {
+func (s SourceSingleMap) Lookup(src string) (value string, ok bool) {
 	value, ok = s[src]
 	return
 }
@@ -69,7 +69,7 @@ func (s SourceSingleMap) Get(src string) (value string, ok bool) {
 // SourceMultiMap implements SourceMulti.
 type SourceMultiMap map[string][]string
 
-func (src SourceMultiMap) GetAll(key string) (value []string, ok bool) {
+func (src SourceMultiMap) LookupAll(key string) (value []string, ok bool) {
 	value, ok = src[key]
 	return
 }

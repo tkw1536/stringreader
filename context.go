@@ -2,13 +2,13 @@ package stringreader
 
 import "reflect"
 
-// ParsingContext holds contextual data that is passed to parsers.
+// UnmarshalContext holds contextual data that is passed to parsers.
 // It contains an internal reference to a ParsingData object.
 //
-// Parsers should not retain references to ParsingContext, as it might be re-used between parsers.
+// Parsers should not retain references to UnmarshalContext, as it might be re-used between parsers.
 // See also SingleParser, MultiParser.
-type ParsingContext interface {
-	UnmarshalContext
+type UnmarshalContext interface {
+	UnmarshalState
 
 	// Get returns a local datum associated to the current destination from the underlying ParsingData object.
 	Get(key string) interface{}
@@ -17,9 +17,9 @@ type ParsingContext interface {
 	GetGlobal(key string) interface{}
 }
 
-// UnmarshalContext holds the current state of the unmarshaling process.
+// UnmarshalState holds the current state of the unmarshaling process.
 // It does not hold any references to ParsingData objects.
-type UnmarshalContext interface {
+type UnmarshalState interface {
 	// Dest returns the name of the destination field that is being written to.
 	// When no destination is being written, returns the empty string.
 	Dest() string
@@ -42,7 +42,7 @@ type UnmarshalContext interface {
 // Data is keyed by strings.
 // The zero value is ready-to-use.
 //
-// See also ParsingContext on how this data is accessed.
+// See also UnmarshalContext on how this data is accessed.
 type ParsingData struct {
 	// Globals holds data not associated to a specific field during parsing.
 	// Each datum is keyed by a simple string.
@@ -90,8 +90,8 @@ func (p *ParsingData) DeleteLocal(field, key string) {
 	delete(locals, key)
 }
 
-// parsingContext is the implementation of ParsingContext.
-type parsingContext struct {
+// unmarshalContext is the implementation of UnmarshalContext.
+type unmarshalContext struct {
 	dest, source, parser string
 	single               bool
 	data                 ParsingData
@@ -99,39 +99,39 @@ type parsingContext struct {
 }
 
 // Reset resets this parsing context to prepare it for re-use inside of a sync.Pool
-func (p *parsingContext) Reset() {
+func (p *unmarshalContext) Reset() {
 	p.dest, p.source, p.parser = "", "", ""
 	p.single = false
 	p.data = ParsingData{}
 }
 
-// The remainder of functions implement ParsingContext.
+// The remainder of functions implement UnmarshalContext.
 // See the interface documentation for details.
 
-func (p parsingContext) Dest() string {
+func (p unmarshalContext) Dest() string {
 	return p.dest
 }
 
-func (p parsingContext) Source() string {
+func (p unmarshalContext) Source() string {
 	return p.source
 }
 
-func (p parsingContext) Parser() string {
+func (p unmarshalContext) Parser() string {
 	return p.parser
 }
 
-func (p parsingContext) Single() bool {
+func (p unmarshalContext) Single() bool {
 	return p.single
 }
 
-func (p parsingContext) GetGlobal(key string) interface{} {
+func (p unmarshalContext) GetGlobal(key string) interface{} {
 	return p.data.Globals[key]
 }
 
-func (p parsingContext) Get(key string) interface{} {
+func (p unmarshalContext) Get(key string) interface{} {
 	return p.data.Locals[p.dest][key]
 }
 
-func (p parsingContext) Tag() reflect.StructTag {
+func (p unmarshalContext) Tag() reflect.StructTag {
 	return p.tag
 }
