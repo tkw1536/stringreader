@@ -1,5 +1,7 @@
 package stringreader
 
+import "reflect"
+
 // ParsingContext holds contextual data that is passed to parsers.
 // It contains an internal reference to a ParsingData object.
 //
@@ -31,6 +33,9 @@ type UnmarshalContext interface {
 	// Single indicates if the parser being used is a SingleParser (true) or MultiParser (false).
 	// When the Parser() method returns the empty string, the result is undefined.
 	Single() bool
+
+	// Tag returns the StructTag of the destination field that is being written to.
+	Tag() reflect.StructTag
 }
 
 // ParsingData holds contextual data for parsers.
@@ -57,6 +62,14 @@ func (p *ParsingData) SetGlobal(key string, value interface{}) {
 	p.Globals[key] = value
 }
 
+// DeleteGlobal deletes the provided global datum identified by key.
+func (p *ParsingData) DeleteGlobal(key string) {
+	if p.Globals == nil {
+		return
+	}
+	delete(p.Globals, key)
+}
+
 // SetLocal sets the local datum for field identified by key to value.
 func (p *ParsingData) SetLocal(field, key string, value interface{}) {
 	if p.Locals == nil {
@@ -68,11 +81,21 @@ func (p *ParsingData) SetLocal(field, key string, value interface{}) {
 	p.Locals[field][key] = value
 }
 
+// DeleteLocal deletes the provided local datum identified.
+func (p *ParsingData) DeleteLocal(field, key string) {
+	locals, ok := p.Locals[field]
+	if !ok || locals == nil {
+		return
+	}
+	delete(locals, key)
+}
+
 // parsingContext is the implementation of ParsingContext.
 type parsingContext struct {
 	dest, source, parser string
 	single               bool
 	data                 ParsingData
+	tag                  reflect.StructTag
 }
 
 // Reset resets this parsing context to prepare it for re-use inside of a sync.Pool
@@ -107,4 +130,8 @@ func (p parsingContext) GetGlobal(key string) interface{} {
 
 func (p parsingContext) Get(key string) interface{} {
 	return p.data.Locals[p.dest][key]
+}
+
+func (p parsingContext) Tag() reflect.StructTag {
+	return p.tag
 }

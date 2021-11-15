@@ -100,6 +100,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 
 		fType := fStructField.Type
 		ctx.dest = fStructField.Name
+		ctx.tag = fStructField.Tag
 
 		// determine the type of parser to run
 		// using the default type when necessary
@@ -129,6 +130,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 					return ErrInlineNotStruct{
 						dest:   ctx.dest,
 						parser: ctx.parser,
+						tag:    ctx.tag,
 					}
 				}
 
@@ -142,6 +144,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 			default:
 				return ErrInlineNotStruct{
 					dest:   ctx.dest,
+					tag:    ctx.tag,
 					parser: ctx.parser,
 				}
 			}
@@ -170,6 +173,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				dest:   ctx.dest,
 				source: ctx.source,
 				parser: ctx.parser,
+				tag:    ctx.tag,
 
 				cause: err,
 			}
@@ -197,6 +201,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				source: ctx.source,
 				parser: ctx.parser,
 				single: ctx.single,
+				tag:    ctx.tag,
 
 				cause: pErr,
 			}
@@ -215,6 +220,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 						source: ctx.source,
 						parser: ctx.parser,
 						single: ctx.single,
+						tag:    ctx.tag,
 
 						Assignment:   false,
 						ReturnedType: rValue.Type(),
@@ -230,6 +236,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 						source: ctx.source,
 						parser: ctx.parser,
 						single: ctx.single,
+						tag:    ctx.tag,
 
 						Assignment:   false,
 						ReturnedType: rValue.Type(),
@@ -255,6 +262,7 @@ func (m Marshal) UnmarshalContext(dest interface{}, source Source, data ParsingD
 				source: ctx.source,
 				parser: ctx.parser,
 				single: ctx.single,
+				tag:    ctx.tag,
 
 				Assignment:   true,
 				ReturnedType: rValue.Type(),

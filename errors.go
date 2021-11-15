@@ -13,13 +13,21 @@ type UnmarshalError interface {
 	UnmarshalContext
 }
 
+// ensure that all the errors in this package implement UnmarshalError.
+var _ UnmarshalError = (*freeUnmarshalError)(nil)
+var _ UnmarshalError = (*ErrInlineNotStruct)(nil)
+var _ UnmarshalError = (*ErrUnknownParser)(nil)
+var _ UnmarshalError = (*ErrFailedToParseField)(nil)
+var _ UnmarshalError = (*ErrWrongDestType)(nil)
+
 // freeUnmarshalError implements UnmarshalError, but does not contain any contextual information.
 type freeUnmarshalError string
 
-func (freeUnmarshalError) Dest() string   { return "" }
-func (freeUnmarshalError) Source() string { return "" }
-func (freeUnmarshalError) Parser() string { return "" }
-func (freeUnmarshalError) Single() bool   { return false }
+func (freeUnmarshalError) Dest() string           { return "" }
+func (freeUnmarshalError) Source() string         { return "" }
+func (freeUnmarshalError) Parser() string         { return "" }
+func (freeUnmarshalError) Single() bool           { return false }
+func (freeUnmarshalError) Tag() reflect.StructTag { return "" }
 
 func (err freeUnmarshalError) Error() string { return string(err) }
 
@@ -31,12 +39,14 @@ var ErrNotPointerToStruct UnmarshalError = freeUnmarshalError("Marshal.Unmarshal
 type ErrInlineNotStruct struct {
 	dest   string
 	parser string
+	tag    reflect.StructTag
 }
 
-func (err ErrInlineNotStruct) Dest() string   { return err.dest }
-func (err ErrInlineNotStruct) Source() string { return "" }
-func (err ErrInlineNotStruct) Parser() string { return "" }
-func (err ErrInlineNotStruct) Single() bool   { return false }
+func (err ErrInlineNotStruct) Dest() string           { return err.dest }
+func (ErrInlineNotStruct) Source() string             { return "" }
+func (ErrInlineNotStruct) Parser() string             { return "" }
+func (ErrInlineNotStruct) Single() bool               { return false }
+func (err ErrInlineNotStruct) Tag() reflect.StructTag { return err.tag }
 
 func (err ErrInlineNotStruct) Error() string {
 	return fmt.Sprintf("Marshal.Unmarshal: Destination field %s is to be inlined, but not a struct or pointer to struct", err.dest)
@@ -45,14 +55,16 @@ func (err ErrInlineNotStruct) Error() string {
 // ErrUnknownParser indicates that an unknown parser was encountered.
 // Implements UnmarshalError.
 type ErrUnknownParser struct {
-	dest, source, parser string // TODO: fixme
+	dest, source, parser string
+	tag                  reflect.StructTag
 	cause                error
 }
 
-func (err ErrUnknownParser) Dest() string   { return err.dest }
-func (err ErrUnknownParser) Source() string { return err.source }
-func (err ErrUnknownParser) Parser() string { return err.parser }
-func (err ErrUnknownParser) Single() bool   { return false }
+func (err ErrUnknownParser) Dest() string           { return err.dest }
+func (err ErrUnknownParser) Source() string         { return err.source }
+func (err ErrUnknownParser) Parser() string         { return err.parser }
+func (ErrUnknownParser) Single() bool               { return false }
+func (err ErrUnknownParser) Tag() reflect.StructTag { return err.tag }
 
 func (err ErrUnknownParser) Error() string {
 	return fmt.Sprintf("Marshal.Unmarshal: Destination field %q has unknown parser %s: %s", err.dest, err.parser, err.cause.Error())
@@ -66,14 +78,16 @@ func (err ErrUnknownParser) Unwrap() error { return err.cause }
 type ErrFailedToParseField struct {
 	dest, source, parser string
 	single               bool
+	tag                  reflect.StructTag
 
 	cause error
 }
 
-func (err ErrFailedToParseField) Dest() string   { return err.dest }
-func (err ErrFailedToParseField) Source() string { return err.source }
-func (err ErrFailedToParseField) Parser() string { return err.parser }
-func (err ErrFailedToParseField) Single() bool   { return err.single }
+func (err ErrFailedToParseField) Dest() string           { return err.dest }
+func (err ErrFailedToParseField) Source() string         { return err.source }
+func (err ErrFailedToParseField) Parser() string         { return err.parser }
+func (err ErrFailedToParseField) Single() bool           { return err.single }
+func (err ErrFailedToParseField) Tag() reflect.StructTag { return err.tag }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
 func (err ErrFailedToParseField) Unwrap() error { return err.cause }
@@ -87,6 +101,7 @@ func (err ErrFailedToParseField) Error() string {
 type ErrWrongDestType struct {
 	dest, source, parser string
 	single               bool
+	tag                  reflect.StructTag
 
 	Assignment   bool // indicates if the failed operation was an assignment or converstion
 	ReturnedType reflect.Type
@@ -95,10 +110,11 @@ type ErrWrongDestType struct {
 	cause error
 }
 
-func (err ErrWrongDestType) Dest() string   { return err.dest }
-func (err ErrWrongDestType) Source() string { return err.source }
-func (err ErrWrongDestType) Parser() string { return err.parser }
-func (err ErrWrongDestType) Single() bool   { return err.single }
+func (err ErrWrongDestType) Dest() string           { return err.dest }
+func (err ErrWrongDestType) Source() string         { return err.source }
+func (err ErrWrongDestType) Parser() string         { return err.parser }
+func (err ErrWrongDestType) Single() bool           { return err.single }
+func (err ErrWrongDestType) Tag() reflect.StructTag { return err.tag }
 
 // Unwrap provides compatibility for Go 1.13 error chains.
 func (err ErrWrongDestType) Unwrap() error { return err.cause }
