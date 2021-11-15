@@ -38,7 +38,7 @@ var contextPool = &sync.Pool{
 	},
 }
 
-// UnmarshalState unmarshals data from source into dest.
+// Unmarshal unmarshals data from source into dest.
 // Any non-nil error returned implements UnmarshalError.
 //
 // Dest must be a pointer to a struct; if this is not the case, ErrDestIsNil or ErrNotPointerToStruct is returned.
@@ -48,7 +48,7 @@ var contextPool = &sync.Pool{
 // For each public field, the go tags are examined.
 //
 // When m.InlineParser is non-empty and m.ParserTag is non-empty and the parser tag equals the inline tag, atttempt
-// to recursivly calls UnmarshalState with the same source and data.
+// to recursivly calls Unmarshal with the same source and data.
 // When the field type is a struct, the field value can be used as a new dest.
 // When the field type is a pointer to a struct, create a new zero value (when needed) for the provided type and then use it as a dest.
 // When the field type is none of the above, return ErrInlineNotStruct.
@@ -66,7 +66,12 @@ var contextPool = &sync.Pool{
 // When the Parser function returns a value and nil error, it is written into the specified field of dest.
 // When strict typing is disabled, will first attempt to convert the value to the target type.
 // When either the conversion, or assignablity is impossible, an error is returned.
-func (m Marshal) UnmarshalState(dest interface{}, source Source, data ParsingData) error {
+func (m Marshal) Unmarshal(dest interface{}, source Source, data ParsingData) error {
+	return m.unmarshal(dest, source, data)
+}
+
+// unmarshal implements Unmarshal
+func (m Marshal) unmarshal(dest interface{}, source Source, data ParsingData) UnmarshalError {
 	if dest == nil {
 		return ErrDestIsNil
 	}
@@ -149,7 +154,7 @@ func (m Marshal) UnmarshalState(dest interface{}, source Source, data ParsingDat
 				}
 			}
 
-			err := m.UnmarshalState(fieldPointer, source, data)
+			err := m.unmarshal(fieldPointer, source, data)
 			if err != nil {
 				return err
 			}
@@ -275,9 +280,9 @@ func (m Marshal) UnmarshalState(dest interface{}, source Source, data ParsingDat
 	return nil
 }
 
-// Unmarshal is like UnmarshalState, but with a nil context
-func (m Marshal) Unmarshal(dest interface{}, source Source) error {
-	return m.UnmarshalState(dest, source, ParsingData{})
+// UnmarshalAll is like UnmarshalState, but with a nil context
+func (m Marshal) UnmarshalAll(dest interface{}, source Source) error {
+	return m.Unmarshal(dest, source, ParsingData{})
 }
 
 // reflectConvert converts rValue to rType, and catches any panic that occurs
@@ -293,12 +298,12 @@ func reflectConvert(rValue reflect.Value, rType reflect.Type) (v reflect.Value, 
 
 // UnmarshalSingle is like Unmarshal, except that it pretends the multi fields for source do not exist
 func (m Marshal) UnmarshalSingle(dest interface{}, source SourceSingle) error {
-	return m.Unmarshal(dest, SourceSplit{SourceSingle: source})
+	return m.UnmarshalAll(dest, SourceSplit{SourceSingle: source})
 }
 
 // UnmarshalMulti is like Unmarshal, except that it pretends the single fields for source do not exist
 func (m Marshal) UnmarshalMulti(dest interface{}, source SourceMulti) error {
-	return m.Unmarshal(dest, SourceSplit{SourceMulti: source})
+	return m.UnmarshalAll(dest, SourceSplit{SourceMulti: source})
 }
 
 // GetParser finds either a single or multi parser, and performs appropriate error checking
