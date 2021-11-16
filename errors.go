@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-// MarshalError is an error returned by a Marshal function.
+// MarshalError is an error that is returned during (un)marshaling
 type MarshalError interface {
 	error
 	State

@@ -35,7 +35,7 @@ type State interface {
 	// Typ returns the type of the field being processed.
 	// When no field is being processed, returns the empty string.
 	Typ() string
-	// Kind indicates what kind of processor is being used
+	// Kind indicates what kind of processor
 	Kind() Kind
 }
 
