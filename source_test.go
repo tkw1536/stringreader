@@ -3,7 +3,6 @@ package stringreader
 import "fmt"
 
 func ExampleSourceSingleMap() {
-	// create a new source map
 	var source SourceSingle = SourceSingleMap(map[string]string{
 		"key": "value",
 	})
@@ -95,4 +94,63 @@ func ExampleSourceSplit_empty() {
 	// source.Lookup("fake") value="" ok=false
 	// source.LookupAll("key") value=[] ok=false
 	// source.LookupAll("fake") value=[] ok=false
+}
+
+func ExampleSinkSingleMap() {
+	var sink = SinkSingleMap(make(map[string]string))
+
+	fmt.Println(sink.Set("hello", "world"))
+	fmt.Printf("sink[%q] = %q\n", "hello", sink["hello"])
+
+	// Output:
+	// true
+	// sink["hello"] = "world"
+}
+
+func ExampleSinkMultiMap() {
+	var sink = SinkMultiMap(make(map[string][]string))
+
+	fmt.Println(sink.SetAll("hello", []string{"world"}))
+	fmt.Printf("sink[%q] = %q\n", "hello", sink["hello"])
+
+	// Output:
+	// true
+	// sink["hello"] = ["world"]
+}
+
+// Create a new SinkSplit consisting of a SinkSingle and SinkMulti.
+func ExampleSinkSplit() {
+	single := SinkSingleMap(make(map[string]string))
+	multi := SinkMultiMap(make(map[string][]string))
+
+	// Create a new SourceSplit, and set either component to an appropriate map.
+	var sink Sink = SinkSplit{
+		SinkSingle: single,
+		SinkMulti:  multi,
+	}
+
+	fmt.Println(sink.Set("hello", "world"))
+	fmt.Printf("single[%q] = %q\n", "hello", single["hello"])
+
+	fmt.Println(sink.SetAll("hello", []string{"world"}))
+	fmt.Printf("multi[%q] = %q\n", "hello", multi["hello"])
+
+	// Output:
+	// true
+	// single["hello"] = "world"
+	// true
+	// multi["hello"] = ["world"]
+}
+
+// Creating an empty SinkSplit creates a sink which always fails
+func ExampleSinkSplit_empty() {
+	// Create a new SinkSplit, but do not set either component.
+	var sink Sink = SinkSplit{}
+
+	fmt.Println(sink.Set("hello", "world"))
+	fmt.Println(sink.SetAll("hello", []string{"world"}))
+
+	// Output:
+	// false
+	// false
 }
