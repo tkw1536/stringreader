@@ -73,3 +73,46 @@ func (src SourceMultiMap) LookupAll(key string) (value []string, ok bool) {
 	value, ok = src[key]
 	return
 }
+
+// SourceSmartSplit is like SourceSplit, but differs in behavior for unset components.
+//
+// When a component is unset, attempts to use the other component.
+//
+//  - a SingleSource is emulated using the first available element from the MultiSource
+//  - a MultiSource is emulated returning either only the SingleSource element or nothing
+//
+// When neither component is present, returns an empty source.
+type SourceSmartSplit struct {
+	SourceSingle
+	SourceMulti
+}
+
+func (s SourceSmartSplit) Lookup(value string) (string, bool) {
+	switch {
+	case s.SourceSingle != nil:
+		return s.SourceSingle.Lookup(value)
+	case s.SourceMulti != nil:
+		result, ok := s.SourceMulti.LookupAll(value)
+		if !ok || len(result) == 0 {
+			return "", false
+		}
+		return result[0], true
+	default:
+		return "", false
+	}
+}
+
+func (s SourceSmartSplit) LookupAll(value string) ([]string, bool) {
+	switch {
+	case s.SourceMulti != nil:
+		return s.SourceMulti.LookupAll(value)
+	case s.SourceSingle != nil:
+		result, ok := s.SourceSingle.Lookup(value)
+		if !ok {
+			return nil, true
+		}
+		return []string{result}, true
+	default:
+		return nil, false
+	}
+}
